@@ -1,0 +1,75 @@
+{
+  "name": "vizodesk",
+  "version": "1.0.0",
+  "description": "VizoDesk — Creative Business Management for Photographers & Videographers",
+  "main": "electron/main.js",
+  "type": "commonjs",
+  "private": true,
+  "scripts": {
+    "dev": "concurrently --kill-others-on-fail --prefix-colors \"bgBlue.bold,bgGreen.bold,bgMagenta.bold,bgYellow.bold\" --names \"SERVER,CLIENT,PORTAL,ELECTRON\" \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:portal\" \"npm run dev:electron\"",
+    "dev:server": "cd server && npm run dev",
+    "dev:client": "cd client && npm run dev",
+    "dev:portal": "cd portal && npm run dev",
+    "dev:electron": "wait-on http://localhost:5173 && cross-env NODE_ENV=development electron .",
+    "build:client": "cd client && npm run build",
+    "build:portal": "cd portal && npm run build",
+    "build": "npm run build:client && npm run build:portal",
+    "dist:win": "npm run build && electron-builder --win",
+    "dist:mac": "npm run build && electron-builder --mac",
+    "dist": "npm run build && electron-builder --win --mac"
+  },
+  "dependencies": {
+    "electron-updater": "^6.1.8"
+  },
+  "devDependencies": {
+    "concurrently": "^8.2.2",
+    "cross-env": "^7.0.3",
+    "electron": "^30.0.0",
+    "electron-builder": "^24.9.1",
+    "wait-on": "^7.2.0"
+  },
+  "build": {
+    "appId": "com.vizodesk.app",
+    "productName": "VizoDesk",
+    "directories": {
+      "output": "dist-electron"
+    },
+    "extraResources": [
+      {
+        "from": "server",
+        "to": "server",
+        "filter": [
+          "**/*",
+          "!node_modules"
+        ]
+      },
+      {
+        "from": "database",
+        "to": "database",
+        "filter": [
+          "schema.sql"
+        ]
+      }
+    ],
+    "win": {
+      "target": [
+        "nsis"
+      ],
+      "icon": "assets/icon.ico"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "icon": "assets/icon.icns",
+      "category": "public.app-category.business"
+    },
+    "files": [
+      "electron/**/*",
+      "client/dist/**/*",
+      "assets/**/*",
+      "node_modules/**/*",
+      "package.json"
+    ]
+  }
+}

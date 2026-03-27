@@ -1,0 +1,72 @@
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Secrets & local env (never commit real .env files)
+**/.env
+**/.env.*
+!**/.env.example
+
+# Images
+*.png
+*.jpg
+*.jpeg
+*.webp
+
+# Videos
+*.mp4
+*.mov
+*.avi
+
+# Upload folders
+uploads/
+media/
+temp/
+
+# OS junk
+.DS_Store
+Thumbs.db
+
+# Node
+node_modules/
+.env
+
+# Build output
+dist/
+build/
+out/
+*.local
+
+# Databases & local data
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+*.sqlite
+*.sqlite3
+
+# Uploads & user content
+uploads/
+
+# Logs & caches
+*.log
+npm-debug.log*
+.DS_Store
+Thumbs.db
+
+# IDE / tooling
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Test / coverage
+coverage/
+.nyc_output/
+
+# Vite / caches
+client/node_modules/.vite/
+portal/node_modules/.vite/
+
+# Electron / packager (if used)
+release/

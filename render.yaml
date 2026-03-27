@@ -1,0 +1,32 @@
+# Render Blueprint — deploy the VizoDesk API (Express + SQLite).
+# Docs: https://render.com/docs/blueprint-spec
+#
+# After the first deploy, open the service → Environment and set:
+#   JWT_SECRET      — long random string (keep stable; encrypts saved secrets)
+#   CLIENT_URL      — https://your-admin.vercel.app (or wherever the admin SPA is)
+#   PORTAL_URL      — https://your-portal.vercel.app
+#
+# Free tier: the service sleeps when idle (first request may take ~30s). SQLite
+# lives on disk until redeploy; for data that survives redeploys, upgrade and
+# attach a disk, then set DB_PATH to a file under the disk mount.
+
+version: "1"
+services:
+  - type: web
+    name: vizodesk-api
+    runtime: node
+    region: oregon
+    plan: free
+    rootDir: server
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_VERSION
+        value: "20"
+      - key: JWT_SECRET
+        sync: false
+      - key: CLIENT_URL
+        sync: false
+      - key: PORTAL_URL
+        sync: false
