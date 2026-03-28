@@ -98,45 +98,142 @@ function isStandaloneTermsHeading(line) {
   return /^terms\s*&\s*conditions\s*:?\s*$/i.test(String(line || '').trim());
 }
 
-function TermsBody({ text }) {
-  const lines = String(text || '')
-    .split(/\r?\n/)
-    .filter((line) => !isStandaloneTermsHeading(line));
+function isBulletLine(line) {
+  return /^\s*[•\*\-]\s*\S/.test(String(line || ''));
+}
+
+/** One block = lines from a bullet until the next bullet (or end). */
+function splitTermsIntoBulletBlocks(lines) {
+  const blocks = [];
+  let i = 0;
+  while (i < lines.length) {
+    if (isBulletLine(lines[i])) {
+      const chunk = [lines[i]];
+      i += 1;
+      while (i < lines.length && !isBulletLine(lines[i])) {
+        chunk.push(lines[i]);
+        i += 1;
+      }
+      blocks.push({ type: 'bullet', lines: chunk });
+    } else {
+      const chunk = [];
+      while (i < lines.length && !isBulletLine(lines[i])) {
+        chunk.push(lines[i]);
+        i += 1;
+      }
+      if (chunk.some((c) => String(c).trim() !== '')) {
+        blocks.push({ type: 'plain', lines: chunk });
+      }
+    }
+  }
+  return blocks;
+}
+
+/** Renders like • Title: body (purple title + zinc body), including Title on one line and body on following lines. */
+function TermsBulletBlock({ lines }) {
+  const first = String(lines[0] || '').trimEnd();
+  const tail = lines
+    .slice(1)
+    .map((l) => String(l).trimEnd())
+    .filter((l) => l.trim() !== '');
+
+  const stripped = first.replace(/^\s*[•\*\-]\s*/, '').trim();
+  const idx = stripped.indexOf(':');
+  let headingWithColon;
+  let bodyText;
+
+  if (idx > 0 && idx < stripped.length - 1) {
+    headingWithColon = `${stripped.slice(0, idx).trim()}:`;
+    bodyText = stripped.slice(idx + 1).trim();
+    if (tail.length) {
+      bodyText = [bodyText, ...tail.map((t) => t.trim())].filter(Boolean).join('\n\n');
+    }
+  } else {
+    headingWithColon = `${stripped}:`;
+    bodyText = tail.map((t) => t.trim()).filter(Boolean).join('\n\n');
+  }
+
+  const bodyMultiline = bodyText.includes('\n');
+
   return (
-    <div className="rounded-xl border border-white/[0.05] bg-black/20 p-4 sm:p-5 text-sm leading-relaxed">
+    <div className="mb-4 last:mb-0 text-sm leading-relaxed">
+      <span className="font-semibold text-fuchsia-400">• {headingWithColon}</span>
+      {bodyText ? (
+        <span
+          className={`text-zinc-400 ${bodyMultiline ? ' mt-1.5 block whitespace-pre-wrap' : ''}`}
+        >
+          {bodyMultiline ? bodyText : ` ${bodyText}`}
+        </span>
+      ) : null}
+    </div>
+  );
+}
+
+function TermsPlainLines({ lines, keyPrefix }) {
+  return (
+    <>
       {lines.map((line, i) => {
-        const raw = line.trimEnd();
-        const idx = raw.indexOf(':');
-        const hasHeading =
-          idx > 0 &&
-          idx < raw.length - 1 &&
-          raw.slice(0, idx).trim().length > 0;
-        if (hasHeading) {
-          const body = raw.slice(idx + 1);
+        const raw = String(line).trimEnd();
+        const colonIdx = raw.indexOf(':');
+        const hasInlineHeading =
+          colonIdx > 0 &&
+          colonIdx < raw.length - 1 &&
+          raw.slice(0, colonIdx).trim().length > 0;
+        if (hasInlineHeading) {
+          const body = raw.slice(colonIdx + 1);
           if (body.startsWith('//')) {
             return (
-              <p key={i} className="mb-3.5 last:mb-0 text-zinc-400">
+              <p key={`${keyPrefix}-${i}`} className="mb-3.5 last:mb-0 text-zinc-400">
                 {raw}
               </p>
             );
           }
-          const heading = `${raw.slice(0, idx).trim()}:`;
+          const heading = `${raw.slice(0, colonIdx).trim()}:`;
           return (
-            <p key={i} className="mb-3.5 last:mb-0">
+            <p key={`${keyPrefix}-${i}`} className="mb-3.5 last:mb-0">
               <span className="font-semibold text-fuchsia-400">{heading}</span>
               <span className="text-zinc-400">{body}</span>
             </p>
           );
         }
-        if (raw === '') {
-          return <div key={i} className="h-3 last:hidden" aria-hidden />;
+        if (raw.trim() === '') {
+          return <div key={`${keyPrefix}-${i}`} className="h-3 last:hidden" aria-hidden />;
         }
         return (
-          <p key={i} className="mb-3.5 last:mb-0 text-zinc-400">
+          <p key={`${keyPrefix}-${i}`} className="mb-3.5 last:mb-0 text-zinc-400">
             {raw}
           </p>
         );
       })}
+    </>
+  );
+}
+
+function TermsBody({ text }) {
+  const lines = String(text || '')
+    .split(/\r?\n/)
+    .filter((line) => !isStandaloneTermsHeading(line));
+
+  const anyBullet = lines.some((l) => isBulletLine(l));
+
+  if (anyBullet) {
+    const blocks = splitTermsIntoBulletBlocks(lines);
+    return (
+      <div className="rounded-xl border border-white/[0.05] bg-black/20 p-4 sm:p-5 text-sm leading-relaxed">
+        {blocks.map((block, bi) =>
+          block.type === 'bullet' ? (
+            <TermsBulletBlock key={`b-${bi}`} lines={block.lines} />
+          ) : (
+            <TermsPlainLines key={`p-${bi}`} lines={block.lines} keyPrefix={`p-${bi}`} />
+          )
+        )}
+      </div>
+    );
+  }
+
+  return (
+    <div className="rounded-xl border border-white/[0.05] bg-black/20 p-4 sm:p-5 text-sm leading-relaxed">
+      <TermsPlainLines lines={lines} keyPrefix="legacy" />
     </div>
   );
 }
