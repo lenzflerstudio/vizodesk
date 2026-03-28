@@ -5,6 +5,7 @@ const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../db');
 const contractUploadService = require('../services/contractUploadService');
+const { findBookingByPublicToken } = require('../lib/publicBookingView');
 
 const memoryStorage = multer.memoryStorage();
 const uploadPdf = multer({
@@ -149,7 +150,7 @@ router.put('/:bookingToken/sign', (req, res) => {
   const { signature_data } = req.body;
   if (!signature_data) return res.status(400).json({ error: 'Signature required' });
 
-  const booking = db.prepare('SELECT * FROM bookings WHERE public_token = ?').get(req.params.bookingToken);
+  const booking = findBookingByPublicToken(req.params.bookingToken);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
   const contract = db.prepare('SELECT * FROM contracts WHERE booking_id = ?').get(booking.id);
@@ -167,7 +168,7 @@ router.put('/:bookingToken/sign', (req, res) => {
 
 /** DELETE /api/contracts/:bookingToken/signature — public; clears signature so client can sign again */
 router.delete('/:bookingToken/signature', (req, res) => {
-  const booking = db.prepare('SELECT * FROM bookings WHERE public_token = ?').get(req.params.bookingToken);
+  const booking = findBookingByPublicToken(req.params.bookingToken);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
   const contract = db.prepare('SELECT * FROM contracts WHERE booking_id = ?').get(booking.id);

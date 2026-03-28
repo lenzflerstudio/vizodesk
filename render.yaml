@@ -9,7 +9,7 @@
 # Do NOT set CLOUD_BOOKING_SYNC_URL on Render (only on local Electron) or the server would sync to itself.
 #
 # URLs use service names: https://<name>.onrender.com
-# If you rename a service, update VITE_API_URL on both static sites and CLIENT_URL / PORTAL_URL on the API.
+# If you rename a service, update VITE_API_URL on both static sites (must end with /api) and CLIENT_URL / PORTAL_URL on the API.
 #
 # Free tier: API sleeps when idle (~30s first wake). SQLite may reset on redeploy unless you add a disk + DB_PATH.
 
@@ -51,7 +51,8 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://vizodesk-api.onrender.com
+        # Must include /api — client paths are like /public/booking/:token under this base
+        value: https://vizodesk-api.onrender.com/api
 
   - type: web
     name: vizodesk-portal
@@ -66,4 +67,4 @@ services:
         destination: /index.html
     envVars:
       - key: VITE_API_URL
-        value: https://vizodesk-api.onrender.com
+        value: https://vizodesk-api.onrender.com/api

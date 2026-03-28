@@ -5,14 +5,14 @@ const { getSetting } = require('../lib/integrationSecrets');
 
 const router = express.Router();
 
+/** Accepts raw secret or `Bearer <secret>` (local sync client may send either). */
 function verifySyncSecret(req, res, next) {
   const secret = getSetting('SYNC_SECRET');
   if (!secret) {
     return res.status(503).json({ error: 'SYNC_SECRET is not configured on this server' });
   }
-  const expected = `Bearer ${secret}`;
   const auth = req.headers.authorization;
-  if (!auth || auth !== expected) {
+  if (!auth || (auth !== secret && auth !== `Bearer ${secret}`)) {
     return res.status(401).json({ error: 'Unauthorized' });
   }
   next();
@@ -192,10 +192,12 @@ function upsertBookingFromSync(body) {
   return { bookingId, public_token };
 }
 
-/** POST /api/public/bookings — secured sync from local Electron app */
-router.post('/', verifySyncSecret, (req, res) => {
+/** POST /api/public/bookings and POST /api/sync/booking — inbound sync from local app */
+function handleInboundBookingSync(req, res) {
   try {
-    const result = upsertBookingFromSync(req.body || {});
+    const body = req.body || {};
+    const result = upsertBookingFromSync(body);
+    console.log('Synced booking to Render:', result.public_token);
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.bookingId);
     res.json({ success: true, booking });
   } catch (err) {
@@ -215,7 +217,9 @@ router.post('/', verifySyncSecret, (req, res) => {
     console.error('publicBookings sync:', err);
     res.status(500).json({ error: 'Sync failed' });
   }
-});
+}
+
+router.post('/', verifySyncSecret, handleInboundBookingSync);
 
 /** GET /api/public/bookings/:token — public client view (no auth) */
 router.get('/:token', (req, res) => {
@@ -226,4 +230,6 @@ router.get('/:token', (req, res) => {
   res.json(json);
 });
 
+router.verifySyncSecret = verifySyncSecret;
+router.handleInboundBookingSync = handleInboundBookingSync;
 module.exports = router;

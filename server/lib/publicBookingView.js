@@ -31,18 +31,28 @@ function ensureDefaultContract(bookingId) {
 }
 
 /**
- * Same JSON shape as GET /api/bookings/public/:token (portal + hybrid cloud).
- * @param {string} token public_token
- * @returns {object|null} payload or null if not found
+ * Lookup by `bookings.public_token` only (never by numeric id).
+ * Normalizes case/whitespace so links still work if the DB value differs slightly.
  */
-function buildPublicBookingJson(token) {
-  const booking = db.prepare(`
+function findBookingByPublicToken(rawToken) {
+  const token = String(rawToken || '').trim();
+  if (!token) return null;
+  return db
+    .prepare(`
     SELECT b.*, c.full_name as client_name, c.email as client_email, c.phone as client_phone
     FROM bookings b
     LEFT JOIN clients c ON b.client_id = c.id
-    WHERE b.public_token = ?
-  `).get(token);
-  if (!booking) return null;
+    WHERE LOWER(TRIM(COALESCE(b.public_token, ''))) = LOWER(?)
+  `)
+    .get(token);
+}
+
+/**
+ * Full portal JSON from a row returned by findBookingByPublicToken.
+ * @param {object} booking joined row (includes public_token)
+ */
+function serializePublicBookingPayload(booking) {
+  const tokenForUrls = String(booking.public_token || '').trim();
   ensureDefaultContract(booking.id);
   const contract = db.prepare('SELECT * FROM contracts WHERE booking_id = ?').get(booking.id);
   const payments = db.prepare("SELECT * FROM payments WHERE booking_id = ? AND status = 'Completed'").all(booking.id);
@@ -52,7 +62,8 @@ function buildPublicBookingJson(token) {
   const contractOut = contract
     ? {
         ...contract,
-        pdf_preview_url: contract.pdf_path ? `/api/bookings/public/${token}/contract-pdf` : null,
+        pdf_preview_url:
+          contract.pdf_path && tokenForUrls ? `/api/bookings/public/${tokenForUrls}/contract-pdf` : null,
       }
     : null;
   return {
@@ -64,8 +75,21 @@ function buildPublicBookingJson(token) {
   };
 }
 
+/**
+ * Same JSON shape as GET /api/public/bookings/:token (portal + hybrid cloud).
+ * @param {string} token public_token from URL
+ * @returns {object|null} payload or null if not found
+ */
+function buildPublicBookingJson(token) {
+  const booking = findBookingByPublicToken(token);
+  if (!booking) return null;
+  return serializePublicBookingPayload(booking);
+}
+
 module.exports = {
   buildPublicBookingJson,
+  findBookingByPublicToken,
+  serializePublicBookingPayload,
   ensureDefaultContract,
   packageDetailsForBooking,
 };

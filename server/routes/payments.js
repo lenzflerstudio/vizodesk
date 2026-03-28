@@ -7,6 +7,7 @@ const db = require('../db');
 const { applyPaymentTax } = require('../lib/paymentTax');
 const { getSquareClientForUser, getSquareWebhookVerification } = require('../lib/squareClient');
 const { getResolvedClientPortalBaseUrl } = require('../lib/clientPortalUrl');
+const { findBookingByPublicToken } = require('../lib/publicBookingView');
 
 /** Client-visible card markup (passed through to card total). */
 const CARD_MARKUP = 0.03;
@@ -193,7 +194,7 @@ router.post('/portal/confirm-bank', (req, res) => {
     const mKey = String(method || 'zelle').toLowerCase();
     const methodLabel = PORTAL_METHOD_LABEL[mKey] || 'Zelle';
 
-    const booking = db.prepare('SELECT * FROM bookings WHERE public_token = ?').get(tok);
+    const booking = findBookingByPublicToken(tok);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
     const packageTotal = parseFloat(booking.direct_price) || 0;
@@ -277,13 +278,7 @@ router.post('/square/remaining', async (req, res) => {
   const { booking_token } = req.body;
 
   try {
-    const booking = db.prepare(`
-      SELECT b.*, c.full_name as client_name
-      FROM bookings b
-      JOIN clients c ON b.client_id = c.id
-      WHERE b.public_token = ?
-    `).get(booking_token);
-
+    const booking = findBookingByPublicToken(booking_token);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
     const packageTotal = parseFloat(booking.direct_price || 0);
@@ -295,7 +290,7 @@ router.post('/square/remaining', async (req, res) => {
     }
 
     const chargeDollars = Math.round(baseRemaining * (1 + CARD_MARKUP) * 100) / 100;
-    const tok = encodeURIComponent(booking_token);
+    const tok = encodeURIComponent(String(booking.public_token || booking_token || '').trim());
 
     if (!getResolvedClientPortalBaseUrl()) {
       return res.status(400).json({
@@ -340,13 +335,7 @@ router.post('/square/deposit', async (req, res) => {
   const { booking_token } = req.body;
 
   try {
-    const booking = db.prepare(`
-      SELECT b.*, c.full_name as client_name
-      FROM bookings b
-      JOIN clients c ON b.client_id = c.id
-      WHERE b.public_token = ?
-    `).get(booking_token);
-
+    const booking = findBookingByPublicToken(booking_token);
     if (!booking) return res.status(404).json({ error: 'Booking not found' });
 
     const paidNet = effectivePackagePaid(booking.id);
@@ -360,7 +349,7 @@ router.post('/square/deposit', async (req, res) => {
       return res.status(400).json({ error: 'No retainer amount configured' });
     }
 
-    const tok = encodeURIComponent(booking_token);
+    const tok = encodeURIComponent(String(booking.public_token || booking_token || '').trim());
 
     if (!getResolvedClientPortalBaseUrl()) {
       return res.status(400).json({

@@ -12,6 +12,7 @@ const {
   buildPublicBookingJson,
   ensureDefaultContract,
   packageDetailsForBooking,
+  findBookingByPublicToken,
 } = require('../lib/publicBookingView');
 const { syncBookingToCloud } = require('../lib/syncBookingToCloud');
 
@@ -158,7 +159,7 @@ router.get('/public/:token', (req, res) => {
 
 /** GET /api/bookings/public/:token/contract-pdf — inline PDF for client portal */
 router.get('/public/:token/contract-pdf', (req, res) => {
-  const booking = db.prepare('SELECT id FROM bookings WHERE public_token = ?').get(req.params.token);
+  const booking = findBookingByPublicToken(req.params.token);
   if (!booking) return res.status(404).json({ error: 'Booking not found' });
   const contract = db.prepare('SELECT pdf_path FROM contracts WHERE booking_id = ?').get(booking.id);
   if (!contract || !contract.pdf_path) return res.status(404).json({ error: 'No PDF contract' });

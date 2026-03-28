@@ -58,7 +58,10 @@ function buildBookingSyncPayload(bookingId) {
 
 /**
  * Push booking snapshot to cloud after local save (Electron / local SQLite).
- * Set CLOUD_BOOKING_SYNC_URL in the **local** server environment. SYNC_SECRET: Settings → Integrations or SYNC_SECRET env.
+ * Set CLOUD_BOOKING_SYNC_URL in the **local** environment, e.g.
+ *   https://your-app.onrender.com/api/sync/booking
+ * (or POST /api/public/bookings — same payload and auth).
+ * SYNC_SECRET: same value on local + Render (env or Settings → Integrations).
  * Do not set CLOUD_BOOKING_SYNC_URL on Render — avoids syncing the cloud to itself.
  */
 async function syncBookingToCloud(bookingId) {
@@ -74,14 +77,16 @@ async function syncBookingToCloud(bookingId) {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
-        Authorization: `Bearer ${secret}`,
+        Authorization: secret,
       },
       body: JSON.stringify(payload),
     });
     if (!res.ok) {
       const text = await res.text().catch(() => '');
       console.error('Cloud sync failed:', res.status, text);
+      return;
     }
+    console.log('Pushed booking to cloud:', payload.public_token);
   } catch (err) {
     console.error('Cloud sync failed:', err);
   }
