@@ -1,22 +1,19 @@
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
+const { randomUUID } = require('crypto');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../db');
-const { v4: uuidv4 } = require('uuid');
 const { computeBookingPricing, enrichBookingRow, roundMoney } = require('../lib/bookingPricing');
 const contractUploadService = require('../services/contractUploadService');
-const { serializePackageDetailsPublic } = require('./packages');
 const { getPaymentPortalRow, serializePaymentPortal } = require('../lib/paymentPortalHelper');
-
-function packageDetailsForBooking(booking) {
-  if (!booking?.package_template_id) return null;
-  const pt = db
-    .prepare('SELECT * FROM package_templates WHERE id = ? AND user_id = ?')
-    .get(booking.package_template_id, booking.user_id);
-  return serializePackageDetailsPublic(pt);
-}
+const {
+  buildPublicBookingJson,
+  ensureDefaultContract,
+  packageDetailsForBooking,
+} = require('../lib/publicBookingView');
+const { syncBookingToCloud } = require('../lib/syncBookingToCloud');
 
 function parsePackageTemplateId(body, userId) {
   if (!Object.prototype.hasOwnProperty.call(body, 'package_template_id')) return undefined;
@@ -70,22 +67,6 @@ function normalizeTermsAndConditions(body) {
 function normalizeTermsAndConditionsForUpdate(body) {
   if (!Object.prototype.hasOwnProperty.call(body, 'terms_and_conditions')) return undefined;
   return normalizeTermsAndConditions(body);
-}
-
-/** Every booking is signable: the booking + terms are the agreement (no separate template/PDF required). */
-function ensureDefaultContract(bookingId) {
-  const existing = db.prepare('SELECT 1 FROM contracts WHERE booking_id = ?').get(bookingId);
-  if (existing) return;
-  const b = db.prepare('SELECT terms_and_conditions FROM bookings WHERE id = ?').get(bookingId);
-  const terms = (b?.terms_and_conditions && String(b.terms_and_conditions).trim()) || '';
-  const content =
-    terms.length > 0
-      ? terms
-      : 'The terms and conditions shown on your client booking page are part of this agreement.';
-  db.prepare(`
-    INSERT INTO contracts (booking_id, template_id, template_name, content, pdf_path)
-    VALUES (?, NULL, 'Booking agreement', ?, NULL)
-  `).run(bookingId, content);
 }
 
 // GET /api/bookings
@@ -170,33 +151,9 @@ router.get('/stats', auth, (req, res) => {
 
 // GET /api/bookings/public/:token — must be before /:id (avoid "public" parsed as id)
 router.get('/public/:token', (req, res) => {
-  const booking = db.prepare(`
-    SELECT b.*, c.full_name as client_name, c.email as client_email, c.phone as client_phone
-    FROM bookings b
-    LEFT JOIN clients c ON b.client_id = c.id
-    WHERE b.public_token = ?
-  `).get(req.params.token);
-  if (!booking) return res.status(404).json({ error: 'Booking not found' });
-  ensureDefaultContract(booking.id);
-  const contract = db.prepare('SELECT * FROM contracts WHERE booking_id = ?').get(booking.id);
-  const payments = db.prepare("SELECT * FROM payments WHERE booking_id = ? AND status = 'Completed'").all(booking.id);
-  const payment_portal = serializePaymentPortal(getPaymentPortalRow(booking.user_id));
-  const { user_id, ...safeBooking } = booking;
-  const package_details = packageDetailsForBooking(booking);
-  const token = req.params.token;
-  const contractOut = contract
-    ? {
-        ...contract,
-        pdf_preview_url: contract.pdf_path ? `/api/bookings/public/${token}/contract-pdf` : null,
-      }
-    : null;
-  res.json({
-    ...enrichBookingRow(safeBooking),
-    package_details,
-    payment_portal,
-    contract: contractOut,
-    payments,
-  });
+  const json = buildPublicBookingJson(req.params.token);
+  if (!json) return res.status(404).json({ error: 'Booking not found' });
+  res.json(json);
 });
 
 /** GET /api/bookings/public/:token/contract-pdf — inline PDF for client portal */
@@ -285,7 +242,7 @@ router.post('/', auth, (req, res) => {
     const packageTemplateId = templateIdParsed === undefined ? null : templateIdParsed;
 
     const p = computeBookingPricing(packagePrice, event_date);
-    const publicToken = uuidv4();
+    const publicToken = randomUUID();
 
     const result = db.prepare(`
       INSERT INTO bookings
@@ -328,6 +285,7 @@ router.post('/', auth, (req, res) => {
     ensureDefaultContract(bookingId);
 
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+    syncBookingToCloud(bookingId).catch((e) => console.error('Cloud sync:', e));
     res.status(201).json({
       ...enrichBookingRow(booking),
       package_details: packageDetailsForBooking(booking),
@@ -408,6 +366,7 @@ router.put('/:id', auth, (req, res) => {
     }
   }
 
+  syncBookingToCloud(updated.id).catch((e) => console.error('Cloud sync:', e));
   res.json({
     ...enrichBookingRow(updated),
     package_details: packageDetailsForBooking(updated),

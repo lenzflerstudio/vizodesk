@@ -5,6 +5,7 @@ const fs = require('fs');
 const cors = require('cors');
 const db = require('./db');
 const { verifyOrigin } = require('./lib/corsOrigins');
+const { buildPublicBookingJson } = require('./lib/publicBookingView');
 
 const app = express();
 const PORT = process.env.PORT || 10000;
@@ -29,11 +30,21 @@ app.use('/api/auth', require('./routes/auth'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/packages', require('./routes/packages'));
+app.use('/api/public/bookings', require('./routes/publicBookings'));
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/contracts', require('./routes/contracts'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/email', require('./routes/email'));
+
+/** Public booking JSON by token (no auth) — alias for client links /portal parity */
+app.get('/api/booking/:token', (req, res) => {
+  const token = String(req.params.token || '').trim();
+  if (!token) return res.status(400).json({ error: 'Missing token' });
+  const json = buildPublicBookingJson(token);
+  if (!json) return res.status(404).json({ error: 'Booking not found' });
+  res.json(json);
+});
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 

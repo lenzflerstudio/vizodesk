@@ -15,7 +15,8 @@ async function request(method, path, body = null, isPublic = false) {
 }
 
 export const api = {
-  getBookingByToken: (token) => request('GET', `/bookings/public/${token}`, null, true),
+  /** Public JSON — same payload as GET /api/bookings/public/:token */
+  getBookingByToken: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
   getInvoiceByToken: (token) => request('GET', `/invoices/public/${token}`, null, true),
   createSquareRemainingSession: (booking_token) =>
     request('POST', '/payments/square/remaining', { booking_token }, true),

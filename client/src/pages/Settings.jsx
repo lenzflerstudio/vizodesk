@@ -5,7 +5,7 @@ import { api } from '../lib/api';
 import { validateClientPortalBaseUrl, PORTAL_ROUTE } from '../lib/portalLinks';
 import {
   CircleHelp, LogOut, Save, Loader2, Palette, Pencil, ImageIcon, Upload,
-  Lock, Mail, Search, CreditCard,
+  Lock, Mail, Search, CreditCard, Plug,
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 
@@ -17,7 +17,7 @@ const emptyPaymentPortal = () => ({
   venmo: { instructions: '', qr_data_url: null, copy_text: '' },
 });
 
-const SOON_IDS = new Set(['ai', 'integrations', 'team', 'membership', 'bank', 'payment-methods']);
+const SOON_IDS = new Set(['ai', 'team', 'membership', 'bank', 'payment-methods']);
 
 const COMPANY_NAV = [
   { id: 'brand', label: 'Company brand' },
@@ -26,7 +26,7 @@ const COMPANY_NAV = [
   { id: 'ai', label: 'VizoDesk AI', soon: true },
   { id: 'portal', label: 'Client portal & domain' },
   { id: 'square', label: 'Square payments' },
-  { id: 'integrations', label: 'Integrations', soon: true },
+  { id: 'integrations', label: 'Integrations' },
   { id: 'team', label: 'Team', soon: true },
   { id: 'membership', label: 'Membership', soon: true },
   { id: 'bank', label: 'Bank details', soon: true },
@@ -67,6 +67,12 @@ function SoonPanel({ title }) {
       <p className="text-slate-400 text-sm">{title} is coming soon.</p>
     </div>
   );
+}
+
+function emptyIntegrationMeta() {
+  return {
+    sync_secret: { configured: false, preview: null },
+  };
 }
 
 function formatWebsiteHref(raw) {
@@ -203,6 +209,10 @@ export default function Settings() {
   const [squarePaymentsReady, setSquarePaymentsReady] = useState(false);
   const [savingSquare, setSavingSquare] = useState(false);
 
+  const [integrationMeta, setIntegrationMeta] = useState(() => emptyIntegrationMeta());
+  const [syncSecretDraft, setSyncSecretDraft] = useState('');
+  const [savingIntegrationField, setSavingIntegrationField] = useState(null);
+
   const [emailSignature, setEmailSignature] = useState('');
   const [sigModalOpen, setSigModalOpen] = useState(false);
   const [sigDraft, setSigDraft] = useState('');
@@ -248,6 +258,8 @@ export default function Settings() {
         setSquareAccessTokenSaved(!!s.square_access_token_saved);
         setSquareWebhookSecretSet(!!s.square_webhook_secret_set);
         setSquarePaymentsReady(!!s.square_payments_ready);
+        setIntegrationMeta({ ...emptyIntegrationMeta(), ...(s.integration_secrets || {}) });
+        setSyncSecretDraft('');
         setNotifyEmail(!!s.notify_email);
         setNotifyPayment(!!s.notify_payment);
         setNotifyContract(!!s.notify_contract);
@@ -413,6 +425,40 @@ export default function Settings() {
       toast.error(e.message || 'Failed to remove secret');
     } finally {
       setSavingSquare(false);
+    }
+  };
+
+  const saveIntegrationField = async (fieldKey) => {
+    const map = { sync_secret: syncSecretDraft };
+    const v = String(map[fieldKey] || '').trim();
+    if (!v) {
+      toast.error('Enter a value to save');
+      return;
+    }
+    setSavingIntegrationField(fieldKey);
+    try {
+      const s = await api.saveIntegrationSecrets({ [fieldKey]: v });
+      if (fieldKey === 'sync_secret') setSyncSecretDraft('');
+      if (s.integration_secrets) setIntegrationMeta({ ...emptyIntegrationMeta(), ...s.integration_secrets });
+      toast.success('Saved successfully');
+    } catch (e) {
+      toast.error(e.message || 'Failed to save');
+    } finally {
+      setSavingIntegrationField(null);
+    }
+  };
+
+  const removeIntegrationField = async (fieldKey) => {
+    if (!window.confirm('Remove this value from the server database? Environment variable fallback still applies if set.')) return;
+    setSavingIntegrationField(fieldKey);
+    try {
+      const s = await api.saveIntegrationSecrets({ [fieldKey]: '' });
+      if (s.integration_secrets) setIntegrationMeta({ ...emptyIntegrationMeta(), ...s.integration_secrets });
+      toast.success('Removed stored value');
+    } catch (e) {
+      toast.error(e.message || 'Failed to remove');
+    } finally {
+      setSavingIntegrationField(null);
     }
   };
 
@@ -1346,6 +1392,70 @@ export default function Settings() {
                   {savingSquare ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
                   {savingSquare ? 'Saving…' : 'Save Square settings'}
                 </button>
+              </div>
+            )}
+
+            {activeSection === 'integrations' && (
+              <div className="card">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="mt-0.5 rounded-lg bg-surface-overlay p-2 border border-surface-border">
+                    <Plug size={20} className="text-brand" />
+                  </div>
+                  <div>
+                    <h2 className="text-lg font-semibold text-white">Integrations</h2>
+                    <p className="text-sm text-slate-500 mt-1">
+                      Cloud sync secret is stored encrypted on this server.{' '}
+                      <code className="text-brand-light bg-surface-overlay px-1 py-0.5 rounded text-xs">SYNC_SECRET</code> in{' '}
+                      <code className="text-brand-light bg-surface-overlay px-1 py-0.5 rounded text-xs">server/.env</code> is used only
+                      when nothing is saved here.
+                    </p>
+                  </div>
+                </div>
+
+                <div>
+                  <label className="label">Sync secret</label>
+                  <p className="text-xs text-slate-600 mb-1.5">
+                    Bearer token for{' '}
+                    <code className="text-slate-500">/api/public/bookings</code> and local → cloud booking sync. Must match on both ends.
+                  </p>
+                  <input
+                    type="password"
+                    className="input font-mono text-sm"
+                    value={syncSecretDraft}
+                    onChange={(e) => setSyncSecretDraft(e.target.value)}
+                    placeholder={
+                      integrationMeta.sync_secret?.configured && integrationMeta.sync_secret?.preview
+                        ? `${integrationMeta.sync_secret.preview} (saved — enter new to replace)`
+                        : 'Long random string'
+                    }
+                    autoComplete="off"
+                  />
+                  <div className="flex flex-wrap items-center gap-3 mt-3">
+                    <button
+                      type="button"
+                      className="btn-primary"
+                      disabled={!!savingIntegrationField}
+                      onClick={() => saveIntegrationField('sync_secret')}
+                    >
+                      {savingIntegrationField === 'sync_secret' ? (
+                        <Loader2 size={16} className="animate-spin" />
+                      ) : (
+                        <Save size={16} />
+                      )}
+                      {savingIntegrationField === 'sync_secret' ? 'Saving…' : 'Save'}
+                    </button>
+                    {integrationMeta.sync_secret?.configured ? (
+                      <button
+                        type="button"
+                        className="btn-ghost text-xs text-rose-400"
+                        disabled={!!savingIntegrationField}
+                        onClick={() => removeIntegrationField('sync_secret')}
+                      >
+                        Remove stored secret
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
             )}
           </div>

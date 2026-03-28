@@ -10,6 +10,11 @@ const {
   serializePaymentPortal,
   upsertPaymentPortal,
 } = require('../lib/paymentPortalHelper');
+const {
+  getIntegrationSecretsForApi,
+  applyIntegrationSecretsFromBody,
+  INTEGRATION_BODY_KEYS,
+} = require('../lib/integrationSecrets');
 
 const USER_KEYS = new Set([
   'business_name',
@@ -253,27 +258,48 @@ function serializeUser(row) {
   };
 }
 
+function buildSettingsResponse(userId) {
+  const app = db
+    .prepare(
+      `SELECT client_portal_base_url, square_webhook_notification_url, square_webhook_signature_key_enc
+       FROM app_settings WHERE id = 1`
+    )
+    .get();
+  const u = getUserRow(userId);
+  return {
+    client_portal_base_url: app?.client_portal_base_url ?? null,
+    square_webhook_notification_url:
+      app?.square_webhook_notification_url != null ? String(app.square_webhook_notification_url).trim() : '',
+    square_webhook_secret_set: !!(app?.square_webhook_signature_key_enc),
+    integration_secrets: getIntegrationSecretsForApi(),
+    ...serializeUser(u),
+    payment_portal: serializePaymentPortal(getPaymentPortalRow(userId)),
+  };
+}
+
 // GET /api/settings
 router.get('/', auth, (req, res) => {
   try {
-    const app = db
-      .prepare(
-        `SELECT client_portal_base_url, square_webhook_notification_url, square_webhook_signature_key_enc
-         FROM app_settings WHERE id = 1`
-      )
-      .get();
-    const u = getUserRow(req.userId);
-    return res.json({
-      client_portal_base_url: app?.client_portal_base_url ?? null,
-      square_webhook_notification_url:
-        app?.square_webhook_notification_url != null ? String(app.square_webhook_notification_url).trim() : '',
-      square_webhook_secret_set: !!(app?.square_webhook_signature_key_enc),
-      ...serializeUser(u),
-      payment_portal: serializePaymentPortal(getPaymentPortalRow(req.userId)),
-    });
+    return res.json(buildSettingsResponse(req.userId));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to load settings' });
+  }
+});
+
+// POST /api/settings — integration secrets only (encrypted in app_secret_kv); env remains fallback
+router.post('/', auth, (req, res) => {
+  try {
+    const body = req.body || {};
+    const touched = Object.keys(body).filter((k) => INTEGRATION_BODY_KEYS.has(k));
+    if (touched.length === 0) {
+      return res.status(400).json({ error: 'No integration secret fields in body' });
+    }
+    applyIntegrationSecretsFromBody(body);
+    return res.json(buildSettingsResponse(req.userId));
+  } catch (err) {
+    console.error(err);
+    return res.status(500).json({ error: 'Failed to save integration secrets' });
   }
 });
 
@@ -373,21 +399,7 @@ router.put('/', auth, (req, res) => {
       db.prepare('UPDATE app_settings SET square_webhook_signature_key_enc = ? WHERE id = 1').run(enc);
     }
 
-    const app = db
-      .prepare(
-        `SELECT client_portal_base_url, square_webhook_notification_url, square_webhook_signature_key_enc
-         FROM app_settings WHERE id = 1`
-      )
-      .get();
-    const u = getUserRow(req.userId);
-    return res.json({
-      client_portal_base_url: app?.client_portal_base_url ?? null,
-      square_webhook_notification_url:
-        app?.square_webhook_notification_url != null ? String(app.square_webhook_notification_url).trim() : '',
-      square_webhook_secret_set: !!(app?.square_webhook_signature_key_enc),
-      ...serializeUser(u),
-      payment_portal: serializePaymentPortal(getPaymentPortalRow(req.userId)),
-    });
+    return res.json(buildSettingsResponse(req.userId));
   } catch (err) {
     console.error(err);
     return res.status(500).json({ error: 'Failed to save settings' });

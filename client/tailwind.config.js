@@ -1,6 +1,6 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: ['./index.html', './src/**/*.{js,jsx}'],
+  content: ['./index.html', './src/**/*.{js,jsx}', '../portal/src/**/*.{js,jsx}'],
   theme: {
     extend: {
       colors: {
@@ -18,6 +18,9 @@ export default {
       },
       fontFamily: {
         sans: ['Inter', 'system-ui', 'sans-serif'],
+      },
+      boxShadow: {
+        'portal-card': '0 0 0 1px rgba(255,255,255,0.06) inset, 0 24px 80px -32px rgba(0,0,0,0.75)',
       },
     },
   },

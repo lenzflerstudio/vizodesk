@@ -5,6 +5,8 @@
 #   Build produces client/dist; Express serves /api + admin SPA. Do not deploy repo root as the Node app.
 #
 # After first deploy, set JWT_SECRET on vizodesk-api (Dashboard → Environment).
+# Hybrid sync: set SYNC_SECRET (shared with local .env) and SYNC_OWNER_USER_ID (users.id on this DB).
+# Do NOT set CLOUD_BOOKING_SYNC_URL on Render (only on local Electron) or the server would sync to itself.
 #
 # URLs use service names: https://<name>.onrender.com
 # If you rename a service, update VITE_API_URL on both static sites and CLIENT_URL / PORTAL_URL on the API.
@@ -31,6 +33,10 @@ services:
         value: https://vizodesk-admin.onrender.com
       - key: PORTAL_URL
         value: https://vizodesk-portal.onrender.com
+      - key: SYNC_SECRET
+        sync: false
+      - key: SYNC_OWNER_USER_ID
+        sync: false
 
   - type: web
     name: vizodesk-admin

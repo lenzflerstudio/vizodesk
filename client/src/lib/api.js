@@ -17,7 +17,7 @@ async function request(method, path, body = null, isPublic = false) {
     body: body ? JSON.stringify(body) : undefined,
   });
 
-  if (res.status === 401) {
+  if (res.status === 401 && !isPublic) {
     localStorage.removeItem('vizo_token');
     window.location.href = '/login';
     return;
@@ -77,6 +77,7 @@ export const api = {
   // Settings (business, notifications, payments, portal URL)
   getSettings: () => request('GET', '/settings'),
   updateSettings: (data) => request('PUT', '/settings', data),
+  saveIntegrationSecrets: (data) => request('POST', '/settings', data),
   getEmailTemplates: () => request('GET', '/settings/email-templates'),
   createEmailTemplate: (name) => request('POST', '/settings/email-templates', { name }),
   exportUserData: () => request('GET', '/settings/export'),
@@ -97,7 +98,9 @@ export const api = {
   // Bookings
   getBookings: () => request('GET', '/bookings'),
   getBooking: (id) => request('GET', `/bookings/${id}`),
-  getBookingByToken: (token) => request('GET', `/bookings/public/${token}`, null, true),
+  /** Public client view — no auth, does not trigger login redirect on 401 */
+  getBookingPublic: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
+  getBookingByToken: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
   getStats: () => request('GET', '/bookings/stats'),
   createBooking: (data) => request('POST', '/bookings', data),
   updateBooking: (id, data) => request('PUT', `/bookings/${id}`, data),

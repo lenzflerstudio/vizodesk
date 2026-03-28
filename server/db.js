@@ -80,11 +80,13 @@ async function init() {
 
   // Bookings table: add pricing columns on existing DBs (CREATE IF NOT EXISTS skips new cols)
   migrateBookingsColumns();
+  migrateDropLegacyStripeBookingColumns();
   migrateContractUploads();
   migrateAppSettings();
   migrateUserSettings();
   migrateUserSettingsColumns();
   migrateSquareSettingsColumns();
+  migrateAppSecretKv();
   migrateEmailTemplates();
   migratePaymentsTaxEstimates();
   migratePaymentsSquareIds();
@@ -126,8 +128,6 @@ function migrateBookingsColumns() {
   };
   add('remaining_amount', 'REAL DEFAULT 0');
   add('final_due_date', 'TEXT');
-  add('stripe_deposit', 'REAL DEFAULT 0');
-  add('stripe_remaining', 'REAL DEFAULT 0');
   add('square_deposit', 'REAL DEFAULT 0');
   add('square_remaining', 'REAL DEFAULT 0');
   add('square_price', 'REAL DEFAULT 0');
@@ -146,17 +146,24 @@ function migrateBookingsColumns() {
     WHERE direct_price IS NOT NULL AND event_date IS NOT NULL
       AND event_date != '';
   `);
-  // Legacy Stripe column names (still present on older DBs): keep in sync for any external tools
-  try {
-    _db.run(`
-      UPDATE bookings SET
-        stripe_deposit = square_deposit,
-        stripe_remaining = square_remaining,
-        stripe_price = square_price
-      WHERE direct_price IS NOT NULL AND event_date IS NOT NULL AND event_date != '';
-    `);
-  } catch (_) {
-    /* older schema may omit stripe_* columns */
+  saveDb();
+}
+
+/** Older DBs had stripe_* mirror columns NOT NULL; inserts only set square_* → booking create failed. Square is canonical. */
+function migrateDropLegacyStripeBookingColumns() {
+  const result = _db.exec('PRAGMA table_info(bookings);');
+  if (!result || !result[0]) return;
+  const nameIdx = result[0].columns.indexOf('name');
+  if (nameIdx < 0) return;
+  const colNames = new Set(result[0].values.map((row) => row[nameIdx]));
+  for (const col of ['stripe_price', 'stripe_deposit', 'stripe_remaining']) {
+    if (!colNames.has(col)) continue;
+    try {
+      _db.run(`ALTER TABLE bookings DROP COLUMN ${col};`);
+      colNames.delete(col);
+    } catch (err) {
+      console.warn(`Bookings migration: could not DROP COLUMN ${col}:`, err.message);
+    }
   }
   saveDb();
 }
@@ -289,6 +296,18 @@ function migrateSquareSettingsColumns() {
       add('square_environment', "TEXT DEFAULT 'sandbox'");
     }
   }
+  saveDb();
+}
+
+/** Key/value secrets (e.g. SYNC_SECRET). Separate from singleton app_settings row. */
+function migrateAppSecretKv() {
+  _db.run(`
+    CREATE TABLE IF NOT EXISTS app_secret_kv (
+      key TEXT PRIMARY KEY,
+      value_enc TEXT NOT NULL
+    );
+  `);
+  _db.run(`DELETE FROM app_secret_kv WHERE key IN ('STRIPE_SECRET_KEY', 'STRIPE_WEBHOOK_SECRET');`);
   saveDb();
 }
 

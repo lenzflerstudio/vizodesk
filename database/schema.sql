@@ -118,6 +118,12 @@ CREATE TABLE IF NOT EXISTS app_settings (
   square_webhook_notification_url TEXT
 );
 
+-- Encrypted integration secrets (e.g. SYNC_SECRET); not the singleton app_settings row above
+CREATE TABLE IF NOT EXISTS app_secret_kv (
+  key TEXT PRIMARY KEY,
+  value_enc TEXT NOT NULL
+);
+
 -- Invoices (Wave-style billing; independent from payment records)
 CREATE TABLE IF NOT EXISTS invoices (
   id INTEGER PRIMARY KEY AUTOINCREMENT,

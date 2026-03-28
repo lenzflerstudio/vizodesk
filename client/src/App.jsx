@@ -12,6 +12,7 @@ import Calendar from './pages/Calendar';
 import Settings from './pages/Settings';
 import Taxes from './pages/Taxes';
 import Packages from './pages/Packages';
+import PublicBookingPage from './pages/PublicBookingPage.jsx';
 
 function PrivateRoute({ children }) {
   const { user, loading } = useAuth();
@@ -30,6 +31,10 @@ export default function App() {
         <div className="min-h-[100dvh] min-h-screen overflow-x-hidden bg-surface text-slate-200 antialiased">
         <Routes>
           <Route path="/login" element={<Login />} />
+          <Route path="/booking/:token" element={<PublicBookingPage />} />
+          <Route path="/client/:token" element={<PublicBookingPage />} />
+          <Route path="/contract/:token" element={<PublicBookingPage />} />
+          <Route path="/payment/:token" element={<PublicBookingPage />} />
           <Route path="/" element={
             <PrivateRoute>
               <Layout />
