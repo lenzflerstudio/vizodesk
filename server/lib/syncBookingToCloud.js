@@ -64,32 +64,38 @@ function buildBookingSyncPayload(bookingId) {
  * SYNC_SECRET: same value on local + Render (env or Settings → Integrations).
  * Do not set CLOUD_BOOKING_SYNC_URL on Render — avoids syncing the cloud to itself.
  */
+/**
+ * @returns {Promise<{ synced: true, public_token: string } | { synced: false, reason: string }>}
+ */
 async function syncBookingToCloud(bookingId) {
   const url = process.env.CLOUD_BOOKING_SYNC_URL?.trim();
   const secret = getSetting('SYNC_SECRET');
-  if (!url || !secret) return;
+  if (!url || !secret) {
+    console.warn(
+      'Cloud sync skipped: set CLOUD_BOOKING_SYNC_URL (e.g. https://your-app.onrender.com/api/sync/booking) and SYNC_SECRET on the local server (or SYNC_SECRET under Settings → Integrations).'
+    );
+    return { synced: false, reason: 'missing_config' };
+  }
 
   const payload = buildBookingSyncPayload(bookingId);
-  if (!payload) return;
-
-  try {
-    const res = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: secret,
-      },
-      body: JSON.stringify(payload),
-    });
-    if (!res.ok) {
-      const text = await res.text().catch(() => '');
-      console.error('Cloud sync failed:', res.status, text);
-      return;
-    }
-    console.log('Pushed booking to cloud:', payload.public_token);
-  } catch (err) {
-    console.error('Cloud sync failed:', err);
+  if (!payload) {
+    console.warn('Cloud sync skipped: could not build payload for booking id', bookingId);
+    return { synced: false, reason: 'no_payload' };
   }
+
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      Authorization: secret,
+    },
+    body: JSON.stringify(payload),
+  });
+  const text = await res.text().catch(() => '');
+  if (!res.ok) {
+    throw new Error(text || `HTTP ${res.status}`);
+  }
+  return { synced: true, public_token: payload.public_token };
 }
 
 module.exports = { syncBookingToCloud, buildBookingSyncPayload };

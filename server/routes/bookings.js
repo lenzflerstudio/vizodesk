@@ -286,7 +286,16 @@ router.post('/', auth, (req, res) => {
     ensureDefaultContract(bookingId);
 
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
-    syncBookingToCloud(bookingId).catch((e) => console.error('Cloud sync:', e));
+    console.log('Creating booking locally:', booking.public_token);
+    syncBookingToCloud(bookingId)
+      .then((syncResult) => {
+        if (syncResult?.synced) {
+          console.log('Pushed booking to cloud:', syncResult.public_token);
+        }
+      })
+      .catch((err) => {
+        console.error('Failed to sync booking:', err?.message || err);
+      });
     res.status(201).json({
       ...enrichBookingRow(booking),
       package_details: packageDetailsForBooking(booking),
@@ -367,7 +376,15 @@ router.put('/:id', auth, (req, res) => {
     }
   }
 
-  syncBookingToCloud(updated.id).catch((e) => console.error('Cloud sync:', e));
+  syncBookingToCloud(updated.id)
+    .then((syncResult) => {
+      if (syncResult?.synced) {
+        console.log('Pushed booking to cloud:', syncResult.public_token);
+      }
+    })
+    .catch((err) => {
+      console.error('Failed to sync booking:', err?.message || err);
+    });
   res.json({
     ...enrichBookingRow(updated),
     package_details: packageDetailsForBooking(updated),
