@@ -1,5 +1,4 @@
-import { useLayoutEffect, useRef, useState } from 'react';
-import SignaturePad from 'signature_pad';
+import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { PenLine, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { api } from '../lib/api';
@@ -25,81 +24,156 @@ function Section({ eyebrow, title, icon: Icon, children }) {
   );
 }
 
+/** Map pointer position to canvas bitmap coordinates (handles CSS size vs backing store). */
+function getCanvasPoint(canvas, clientX, clientY) {
+  if (!canvas) return { x: 0, y: 0 };
+  const rect = canvas.getBoundingClientRect();
+  if (rect.width <= 0 || rect.height <= 0) return { x: 0, y: 0 };
+  const scaleX = canvas.width / rect.width;
+  const scaleY = canvas.height / rect.height;
+  return {
+    x: (clientX - rect.left) * scaleX,
+    y: (clientY - rect.top) * scaleY,
+  };
+}
+
+function applyStrokeStyle(ctx, canvas) {
+  if (!ctx || !canvas) return;
+  const rect = canvas.getBoundingClientRect();
+  const dpr = canvas.width / Math.max(rect.width, 1);
+  ctx.strokeStyle = 'rgb(17, 24, 39)';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.lineWidth = Math.max(2, 2 * dpr);
+}
+
+function fillWhite(canvas) {
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) return;
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, canvas.width, canvas.height);
+}
+
 export default function ContractSignatureSection({ bookingToken, contract, onSigned }) {
   const canvasRef = useRef(null);
-  const padRef = useRef(null);
+  const wrapperRef = useRef(null);
+  const drawingRef = useRef(false);
+  const hasInkRef = useRef(false);
   const [saving, setSaving] = useState(false);
   const [resetting, setResetting] = useState(false);
 
   const signed = Boolean(contract?.status === 'Signed' && contract?.signature_data);
 
+  const resizeCanvas = useCallback(() => {
+    const canvas = canvasRef.current;
+    const wrapper = wrapperRef.current;
+    if (!canvas || !wrapper) return;
+    const ratio = Math.max(typeof window !== 'undefined' ? window.devicePixelRatio || 1 : 1, 1);
+    const w = Math.max(wrapper.clientWidth, 1);
+    const h = Math.max(wrapper.clientHeight, 1);
+    canvas.width = Math.floor(w * ratio);
+    canvas.height = Math.floor(h * ratio);
+    canvas.style.width = `${w}px`;
+    canvas.style.height = `${h}px`;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    fillWhite(canvas);
+    applyStrokeStyle(ctx, canvas);
+    hasInkRef.current = false;
+    drawingRef.current = false;
+  }, []);
+
   useLayoutEffect(() => {
     if (signed || !contract) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-
-    let cancelled = false;
-    let pad = null;
+    const wrapper = wrapperRef.current;
+    if (!wrapper) return;
     let ro = null;
-    let resizeFn = null;
-
-    const rafId = requestAnimationFrame(() => {
+    let cancelled = false;
+    const raf = requestAnimationFrame(() => {
       if (cancelled) return;
-      pad = new SignaturePad(canvas, {
-        backgroundColor: 'rgb(255, 255, 255)',
-        penColor: 'rgb(17, 24, 39)',
-        minWidth: 0.65,
-        maxWidth: 2.75,
-      });
-      padRef.current = pad;
-
-      resizeFn = () => {
-        if (!pad || cancelled) return;
-        const wrapper = canvas.parentElement;
-        if (!wrapper) return;
-        const ratio = Math.max(window.devicePixelRatio || 1, 1);
-        const w = Math.max(wrapper.clientWidth, 1);
-        const h = Math.max(wrapper.clientHeight, 1);
-        canvas.width = Math.floor(w * ratio);
-        canvas.height = Math.floor(h * ratio);
-        canvas.style.width = `${w}px`;
-        canvas.style.height = `${h}px`;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return;
-        ctx.setTransform(1, 0, 0, 1, 0, 0);
-        ctx.scale(ratio, ratio);
-        pad.clear();
-      };
-
-      ro = new ResizeObserver(() => resizeFn());
-      ro.observe(canvas.parentElement);
-      resizeFn();
-      window.addEventListener('orientationchange', resizeFn);
+      resizeCanvas();
+      ro = new ResizeObserver(() => resizeCanvas());
+      ro.observe(wrapper);
+      window.addEventListener('orientationchange', resizeCanvas);
     });
-
     return () => {
       cancelled = true;
-      cancelAnimationFrame(rafId);
-      if (resizeFn) window.removeEventListener('orientationchange', resizeFn);
+      cancelAnimationFrame(raf);
+      window.removeEventListener('orientationchange', resizeCanvas);
       if (ro) ro.disconnect();
-      if (pad) pad.off();
-      padRef.current = null;
     };
-  }, [signed, bookingToken, contract?.id]);
+  }, [signed, bookingToken, contract?.id, resizeCanvas]);
 
-  const handleClear = () => {
-    padRef.current?.clear();
-  };
+  const handlePointerDown = useCallback((e) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    e.preventDefault();
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch {
+      /* ignore */
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    applyStrokeStyle(ctx, canvas);
+    const { x, y } = getCanvasPoint(canvas, e.clientX, e.clientY);
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    drawingRef.current = true;
+  }, []);
+
+  const handlePointerMove = useCallback((e) => {
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    e.preventDefault();
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const { x, y } = getCanvasPoint(canvas, e.clientX, e.clientY);
+    ctx.lineTo(x, y);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(x, y);
+    hasInkRef.current = true;
+  }, []);
+
+  const handlePointerUp = useCallback((e) => {
+    if (!drawingRef.current) return;
+    const canvas = canvasRef.current;
+    drawingRef.current = false;
+    if (canvas) {
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+    }
+  }, []);
+
+  const handleClear = useCallback(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    fillWhite(canvas);
+    const ctx = canvas.getContext('2d');
+    if (ctx) applyStrokeStyle(ctx, canvas);
+    hasInkRef.current = false;
+    drawingRef.current = false;
+  }, []);
 
   const handleSave = async () => {
-    const pad = padRef.current;
-    if (!pad || pad.isEmpty()) {
+    const canvas = canvasRef.current;
+    if (!canvas) {
+      toast.error('Signature area is not ready');
+      return;
+    }
+    if (!hasInkRef.current) {
       toast.error('Please sign in the box first');
       return;
     }
     setSaving(true);
     try {
-      const dataUrl = pad.toDataURL('image/png');
+      const dataUrl = canvas.toDataURL('image/png');
       await api.signContract(bookingToken, dataUrl);
       toast.success('Signature saved');
       onSigned();
@@ -171,10 +245,21 @@ export default function ContractSignatureSection({ bookingToken, contract, onSig
         computer.
       </p>
       <div
+        ref={wrapperRef}
         className="relative h-40 w-full overflow-hidden rounded-2xl border border-zinc-600/50 bg-white shadow-inner sm:h-44"
         style={{ touchAction: 'none' }}
       >
-        <canvas ref={canvasRef} className="absolute inset-0 h-full w-full touch-none" />
+        <canvas
+          ref={canvasRef}
+          className="absolute inset-0 h-full w-full touch-none"
+          onPointerDown={handlePointerDown}
+          onPointerMove={handlePointerMove}
+          onPointerUp={handlePointerUp}
+          onPointerCancel={handlePointerUp}
+          onPointerLeave={(e) => {
+            if (drawingRef.current) handlePointerUp(e);
+          }}
+        />
       </div>
       <div className="mt-4 flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
         <button
@@ -198,7 +283,7 @@ export default function ContractSignatureSection({ bookingToken, contract, onSig
           disabled={saving}
           className="w-full rounded-2xl border border-white/15 bg-white/[0.04] py-3.5 text-sm font-semibold text-zinc-200 transition hover:bg-white/[0.08] disabled:opacity-50 sm:w-auto sm:px-6"
         >
-          Reset
+          Clear signature
         </button>
       </div>
     </Section>
