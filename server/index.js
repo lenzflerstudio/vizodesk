@@ -7,7 +7,7 @@ const db = require('./db');
 const { verifyOrigin } = require('./lib/corsOrigins');
 
 const app = express();
-const PORT = Number(process.env.PORT) || 3001;
+const PORT = process.env.PORT || 10000;
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 const hasClientBuild = fs.existsSync(path.join(clientDist, 'index.html'));
@@ -37,18 +37,12 @@ app.use('/api/email', require('./routes/email'));
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
-// ── Admin SPA (Vite build in ../client/dist) — after all /api routes ─────────
+// ── Admin SPA (Vite → client/dist) — after all /api routes ───────────────────
 if (hasClientBuild) {
-  app.use(
-    express.static(clientDist, {
-      index: true,
-      maxAge: process.env.NODE_ENV === 'production' ? '1h' : 0,
-    })
-  );
+  app.use(express.static(clientDist));
 
-  app.use((req, res, next) => {
+  app.get('*', (req, res, next) => {
     if (req.path.startsWith('/api')) return next();
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     res.sendFile(path.join(clientDist, 'index.html'), (err) => {
       if (err) next(err);
     });
@@ -70,36 +64,27 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-// ── Async startup: init DB first, then listen ─────────────────────────────────
-async function start(retries = 5) {
+// ── Init DB, then listen (so API routes work before accepting traffic) ──────
+async function start() {
   await db.init();
 
   if (!hasClientBuild && process.env.NODE_ENV === 'production') {
     console.warn(
-      '⚠️  client/dist not found — build the admin app (npm run build in client/) before deploy, or set root build to include it.'
+      '⚠️  client/dist not found — run a client build before deploy (see render.yaml buildCommand).'
     );
   }
 
-  const server = require('http').createServer(app);
-
-  server.on('error', (err) => {
-    if (err.code === 'EADDRINUSE' && retries > 0) {
-      console.warn(`⚠️  Port ${PORT} busy (TIME_WAIT), retrying in 3 s… (${retries} left)`);
-      server.close();
-      setTimeout(() => start(retries - 1), 3000);
-    } else {
-      console.error('❌ Failed to start server:', err);
-      process.exit(1);
-    }
-  });
-
-  server.listen(PORT, () => {
-    console.log(`✅ VizoDesk API running on port ${PORT}`);
+  app.listen(PORT, () => {
+    console.log(`Server running on port ${PORT}`);
     if (hasClientBuild) {
-      console.log(`✅ Serving admin SPA from ${clientDist}`);
+      console.log(`Serving static files from ${clientDist}`);
     }
   });
 }
 
-start();
+start().catch((err) => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
+});
+
 module.exports = app;
