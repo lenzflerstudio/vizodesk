@@ -20,7 +20,11 @@
     "dist": "npm run build && electron-builder --win --mac"
   },
   "dependencies": {
-    "electron-updater": "^6.1.8"
+    "cors": "^2.8.6",
+    "dotenv": "^17.3.1",
+    "electron-updater": "^6.1.8",
+    "express": "^5.2.1",
+    "sqlite3": "^6.0.1"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",
