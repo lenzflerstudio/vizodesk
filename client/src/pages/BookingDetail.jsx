@@ -21,10 +21,10 @@ export default function BookingDetail() {
 
   const loadBooking = useCallback(() => {
     return api
-      .getBooking(id)
+      .getPublicBooking(token)
       .then(setBooking)
       .catch(() => toast.error('Booking not found'));
-  }, [id]);
+  }, [token]);
 
   useEffect(() => {
     loadBooking().finally(() => setLoading(false));
