@@ -48,11 +48,27 @@ function resolveCloudClientId(ownerId, clientPayload) {
   return ins.lastInsertRowid;
 }
 
-function upsertBookingFromSync(body) {
-  const ownerId = parseInt(process.env.SYNC_OWNER_USER_ID || '', 10);
-  if (!Number.isFinite(ownerId)) {
-    throw new Error('SYNC_OWNER_USER_ID_INVALID');
+/**
+ * Prefer SYNC_OWNER_USER_ID when set and that row exists; otherwise first user (no manual DB lookup).
+ */
+function resolveSyncOwnerUserId() {
+  const raw = process.env.SYNC_OWNER_USER_ID;
+  const parsed =
+    raw != null && String(raw).trim() !== '' ? parseInt(String(raw).trim(), 10) : NaN;
+  if (Number.isFinite(parsed)) {
+    const found = db.prepare('SELECT id FROM users WHERE id = ?').get(parsed);
+    if (found) return found.id;
   }
+  const first = db.prepare('SELECT id FROM users ORDER BY id ASC LIMIT 1').get();
+  if (!first) {
+    throw new Error('OWNER_USER_NOT_FOUND');
+  }
+  console.log('Using fallback owner_id:', first.id);
+  return first.id;
+}
+
+function upsertBookingFromSync(body) {
+  const ownerId = resolveSyncOwnerUserId();
 
   const public_token = String(body?.public_token || '').trim();
   if (!public_token) throw new Error('MISSING_TOKEN');
@@ -62,9 +78,6 @@ function upsertBookingFromSync(body) {
   if (!b.event_type || !b.event_date || b.direct_price == null) {
     throw new Error('MISSING_BOOKING_FIELDS');
   }
-
-  const userExists = db.prepare('SELECT id FROM users WHERE id = ?').get(ownerId);
-  if (!userExists) throw new Error('OWNER_USER_NOT_FOUND');
 
   const clientId = resolveCloudClientId(ownerId, c);
   if (!clientId) throw new Error('CLIENT_RESOLVE_FAILED');
@@ -203,9 +216,6 @@ function handleInboundBookingSync(req, res) {
   } catch (err) {
     console.error('SYNC ERROR:', err);
     const msg = String(err.message || err);
-    if (msg === 'SYNC_OWNER_USER_ID_INVALID') {
-      return res.status(503).json({ error: 'SYNC_OWNER_USER_ID is not set on this server' });
-    }
     if (msg === 'OWNER_USER_NOT_FOUND') {
       return res.status(400).json({ error: 'SYNC_OWNER_USER_ID does not match a user in this database' });
     }
