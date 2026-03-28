@@ -6,6 +6,7 @@
   "type": "commonjs",
   "private": true,
   "scripts": {
+    "start": "node server/index.js",
     "dev": "concurrently --kill-others-on-fail --prefix-colors \"bgBlue.bold,bgGreen.bold,bgMagenta.bold,bgYellow.bold\" --names \"SERVER,CLIENT,PORTAL,ELECTRON\" \"npm run dev:server\" \"npm run dev:client\" \"npm run dev:portal\" \"npm run dev:electron\"",
     "dev:server": "cd server && npm run dev",
     "dev:client": "cd client && npm run dev",
