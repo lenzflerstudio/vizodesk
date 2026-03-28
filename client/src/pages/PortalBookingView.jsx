@@ -359,7 +359,11 @@ export default function PortalBookingView({ token }) {
           </p>
         </div>
 
-        <Section eyebrow="Event" title="Details" icon={Calendar}>
+        <Section
+          eyebrow={isRetainerBooking ? undefined : 'Event'}
+          title={isRetainerBooking ? 'Service detail' : 'Details'}
+          icon={Calendar}
+        >
           <div className="divide-y divide-white/[0.06]">
             <DetailRow icon={User} label="Client" value={booking.client_name} />
             <DetailRow
@@ -396,21 +400,18 @@ export default function PortalBookingView({ token }) {
         ) : null}
 
         {showPackageBlock ? (
-          <Section eyebrow="Your selection" icon={Sparkles}>
+          <Section eyebrow="Your selection" title="Package type" icon={Sparkles}>
             <div className="rounded-2xl border border-white/[0.07] bg-black/25 p-5 sm:p-6">
               <div className="space-y-5">
-                <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Package type</p>
-                  <div className="mt-2 flex flex-wrap items-center gap-3">
-                    {pkg?.icon ? (
-                      <span className="text-3xl leading-none" aria-hidden>
-                        {pkg.icon}
-                      </span>
-                    ) : null}
-                    <p className="min-w-0 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                      {pkg?.display_title || packageName || pkg?.label || 'Your package'}
-                    </p>
-                  </div>
+                <div className="flex flex-wrap items-center gap-3">
+                  {pkg?.icon ? (
+                    <span className="text-3xl leading-none" aria-hidden>
+                      {pkg.icon}
+                    </span>
+                  ) : null}
+                  <p className="min-w-0 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                    {pkg?.display_title || packageName || pkg?.label || 'Your package'}
+                  </p>
                 </div>
 
                 {taglineText ? (

@@ -29,7 +29,7 @@ function isTruthyBody(v) {
 function buildRetainerNotesAppend(body, existingNotes) {
   const lines = ['--- Retainer engagement ---'];
   if (body.retainer_service_type) {
-    lines.push(`Service type: ${String(body.retainer_service_type).trim()}`);
+    lines.push(`Bundle type: ${String(body.retainer_service_type).trim()}`);
   }
   if (
     body.retainer_social_media_management !== undefined &&

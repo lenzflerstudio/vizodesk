@@ -225,7 +225,7 @@ export default function NewBooking() {
     }
     if (isRetainerMode) {
       if (!String(form.retainer_service_type || '').trim()) {
-        return toast.error('Select a service type');
+        return toast.error('Select a bundle type');
       }
       if (!String(form.retainer_billing_cycle || '').trim()) {
         return toast.error('Select a billing cycle');
@@ -421,13 +421,13 @@ export default function NewBooking() {
           </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="label">Service Type *</label>
+              <label className="label">{isRetainerMode ? 'Service type *' : 'Event type *'}</label>
               <input
                 name="event_type"
                 type="text"
                 required
                 className="input"
-                placeholder="Wedding"
+                placeholder={isRetainerMode ? 'e.g. Restaurant content' : 'Wedding'}
                 value={form.event_type}
                 onChange={handle}
                 autoComplete="off"
@@ -521,7 +521,7 @@ export default function NewBooking() {
             <div className="space-y-3 pt-2 border-t border-surface-border">
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 <div>
-                  <label className="label">Service Type</label>
+                  <label className="label">Bundle type</label>
                   <select
                     className="input"
                     value={form.retainer_service_type}
@@ -562,7 +562,7 @@ export default function NewBooking() {
                   <div className="min-w-0">
                     <p className="label mb-0">Social Media Management</p>
                     <p className="text-xs text-slate-600 mt-1">
-                      Include ongoing social strategy / posting in addition to the service type above.
+                      Include ongoing social strategy / posting in addition to the bundle type above.
                     </p>
                   </div>
                   <div className="flex items-center gap-3 shrink-0">
