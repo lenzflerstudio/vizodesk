@@ -70,21 +70,31 @@ function DetailRow({ icon: Icon, label, value }) {
 }
 
 function PriceTile({ label, amount }) {
+  const hasLabel = label != null && String(label).trim() !== '';
   return (
     <div className="rounded-2xl border border-white/[0.06] bg-black/25 px-4 py-3.5 transition-colors hover:border-white/[0.1]">
-      <p className="text-[11px] font-medium leading-snug text-zinc-500">{label}</p>
-      <p className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight text-white">{amount}</p>
+      {hasLabel ? (
+        <p className="text-[11px] font-medium leading-snug text-zinc-500">{label}</p>
+      ) : null}
+      <p className={`text-xl font-semibold tabular-nums tracking-tight text-white ${hasLabel ? 'mt-1.5' : ''}`}>
+        {amount}
+      </p>
     </div>
   );
 }
 
 function PaidPriceRow({ label, amount }) {
+  const hasLabel = label != null && String(label).trim() !== '';
   return (
     <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-3.5">
       <div className="flex flex-wrap items-end justify-between gap-2">
         <div>
-          <p className="text-[11px] font-medium leading-snug text-zinc-500">{label}</p>
-          <p className="mt-1.5 text-xl font-semibold tabular-nums tracking-tight text-white/90">{amount}</p>
+          {hasLabel ? (
+            <p className="text-[11px] font-medium leading-snug text-zinc-500">{label}</p>
+          ) : null}
+          <p className={`text-xl font-semibold tabular-nums tracking-tight text-white/90 ${hasLabel ? 'mt-1.5' : ''}`}>
+            {amount}
+          </p>
         </div>
         <span className="inline-flex shrink-0 items-center rounded-full bg-emerald-500/20 px-2.5 py-1 text-[11px] font-semibold uppercase tracking-wide text-emerald-400">
           Paid
@@ -467,9 +477,9 @@ export default function PortalBookingView({ token }) {
                     </p>
                     <div className="mt-3">
                       {depositPaid ? (
-                        <PaidPriceRow label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                        <PaidPriceRow label={null} amount={formatCurrency(depositDirect)} />
                       ) : (
-                        <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                        <PriceTile label={null} amount={formatCurrency(depositDirect)} />
                       )}
                     </div>
                   </div>
@@ -477,7 +487,7 @@ export default function PortalBookingView({ token }) {
                   <div>
                     <p className="text-xs font-semibold text-zinc-400">Payment due</p>
                     <div className="mt-3">
-                      <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
+                      <PriceTile label={null} amount={formatCurrency(remainingDirectDisplay)} />
                     </div>
                     {booking.final_due_date ? (
                       <p className="mt-2 text-xs text-zinc-500">Due by {booking.final_due_date}</p>
@@ -494,9 +504,9 @@ export default function PortalBookingView({ token }) {
                     </p>
                     <div className="mt-3">
                       {depositPaid ? (
-                        <PaidPriceRow label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                        <PaidPriceRow label={null} amount={formatCurrency(depositDirect)} />
                       ) : (
-                        <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                        <PriceTile label={null} amount={formatCurrency(depositDirect)} />
                       )}
                     </div>
                   </div>
@@ -521,7 +531,7 @@ export default function PortalBookingView({ token }) {
                         <p className="mt-1 text-xs text-zinc-500">No balance due on this booking.</p>
                       </div>
                     ) : (
-                      <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
+                      <PriceTile label={null} amount={formatCurrency(remainingDirectDisplay)} />
                     )}
                   </div>
                 </div>

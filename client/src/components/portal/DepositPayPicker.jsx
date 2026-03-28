@@ -261,14 +261,14 @@ export default function DepositPayPicker({
   }
 
   const pickTitle = isRemaining
-    ? 'Remaining balance — choose a method:'
+    ? SQUARE_CARD_ENABLED
+      ? 'Pay the remaining balance by bank/app transfer or card.'
+      : 'Pay the remaining balance by bank or app transfer.'
     : firstPhaseWording === 'retainer'
       ? 'Retainer — choose a method:'
       : 'Deposit — choose a method:';
   const pickSub = isRemaining
-    ? SQUARE_CARD_ENABLED
-      ? 'Pay the remaining balance by bank/app transfer or card.'
-      : 'Pay the remaining balance by bank or app transfer.'
+    ? null
     : firstPhaseWording === 'retainer'
       ? 'A non-refundable retainer is required to secure your date.'
       : 'A deposit is required to secure your booking.';
@@ -281,7 +281,7 @@ export default function DepositPayPicker({
   return (
     <div className="space-y-2">
       <p className="text-sm text-zinc-500">{pickTitle}</p>
-      <p className="text-xs leading-relaxed text-zinc-600">{pickSub}</p>
+      {pickSub ? <p className="text-xs leading-relaxed text-zinc-600">{pickSub}</p> : null}
 
       <div
         role="radiogroup"
