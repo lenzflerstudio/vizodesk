@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { portalPublicApi as api } from '../lib/portalPublicApi';
 import { formatCurrency } from '../lib/formatCurrency';
-import { Calendar, MapPin, User, Sparkles, Check, FileText, Wallet, Clapperboard, ListChecks } from 'lucide-react';
+import { Calendar, MapPin, User, Sparkles, FileText, Wallet, Clapperboard } from 'lucide-react';
 import DepositPayPicker from '../components/portal/DepositPayPicker.jsx';
 import ContractSignatureSection from '../components/portal/ContractSignatureSection.jsx';
 import { effectivePackagePaid } from '../lib/effectivePaid';
@@ -143,6 +143,7 @@ export default function PortalBookingView({ token }) {
   const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
   const [loadError, setLoadError] = useState(false);
+  const [selectionFeaturesExpanded, setSelectionFeaturesExpanded] = useState(false);
 
   useEffect(() => {
     if (!token) {
@@ -156,6 +157,10 @@ export default function PortalBookingView({ token }) {
       .getPublicBooking(token)
       .then(setBooking)
       .catch(() => setLoadError(true));
+  }, [token]);
+
+  useEffect(() => {
+    setSelectionFeaturesExpanded(false);
   }, [token]);
 
   useEffect(() => {
@@ -265,74 +270,66 @@ export default function PortalBookingView({ token }) {
           </div>
         </Section>
 
-        {retainerPlan?.length ? (
-          <Section eyebrow="Your plan" title="What you're getting" icon={ListChecks}>
-            <div className="divide-y divide-white/[0.06]">
-              {retainerPlan.map((row, i) => (
-                <DetailRow key={`${i}-${row.label}`} label={row.label} value={row.value} />
-              ))}
-            </div>
-          </Section>
-        ) : null}
-
         {showPackageBlock ? (
-          <Section eyebrow="Your selection" title="Package" icon={Sparkles}>
-            <div className="space-y-5">
-              <div className="flex flex-wrap items-start gap-4">
-                {pkg?.icon ? (
-                  <span className="text-4xl leading-none" aria-hidden>
-                    {pkg.icon}
-                  </span>
-                ) : null}
-                <div className="min-w-0 flex-1 space-y-2">
-                  <h3 className="text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                    {packageName || pkg?.display_title || 'Your package'}
-                  </h3>
-                  {pkg?.display_title && packageName && pkg.display_title.trim() !== packageName ? (
-                    <p className="text-sm font-medium text-brand-light/90">{pkg.display_title}</p>
-                  ) : null}
-                  {taglineText ? (
-                    <div className="pt-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                        Description
-                      </p>
-                      <p className="mt-2 text-sm leading-relaxed text-zinc-300">{taglineText}</p>
-                    </div>
-                  ) : null}
-                </div>
-              </div>
-
-              {pkg?.features?.length ? (
+          <Section eyebrow="Your selection" icon={Sparkles}>
+            <div className="rounded-2xl border border-white/[0.07] bg-black/25 p-5 sm:p-6">
+              <div className="space-y-5">
                 <div>
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">Included</p>
-                  <ul className="mt-3 space-y-2.5">
-                    {pkg.features.map((item) => (
-                      <li key={item} className="flex gap-3 text-[15px] leading-snug text-zinc-200">
-                        <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-emerald-500/15 text-emerald-400">
-                          <Check size={12} strokeWidth={2.5} />
-                        </span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Package type</p>
+                  <div className="mt-2 flex flex-wrap items-center gap-3">
+                    {pkg?.icon ? (
+                      <span className="text-3xl leading-none" aria-hidden>
+                        {pkg.icon}
+                      </span>
+                    ) : null}
+                    <p className="min-w-0 text-xl font-semibold tracking-tight text-white sm:text-2xl">
+                      {packageName || pkg?.display_title || pkg?.label || 'Your package'}
+                    </p>
+                  </div>
                 </div>
-              ) : null}
 
-              {pkg?.coverage_heading && pkg?.coverage_items?.length ? (
-                <div className="border-t border-white/[0.06] pt-5">
-                  <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
-                    {pkg.coverage_heading}
-                  </p>
-                  <ul className="mt-3 space-y-2 text-sm leading-snug text-zinc-400">
-                    {pkg.coverage_items.map((item) => (
-                      <li key={item} className="flex gap-2 pl-1">
-                        <span className="text-zinc-600">·</span>
-                        <span>{item}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </div>
-              ) : null}
+                {taglineText ? (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">Description</p>
+                    <p className="mt-2 text-sm leading-relaxed text-zinc-400">{taglineText}</p>
+                  </div>
+                ) : null}
+
+                {pkg?.features?.length ? (
+                  <div>
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">What&apos;s included</p>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-[15px] leading-snug text-zinc-300 marker:text-zinc-600">
+                      {(selectionFeaturesExpanded ? pkg.features : pkg.features.slice(0, 6)).map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                    {pkg.features.length > 6 ? (
+                      <button
+                        type="button"
+                        onClick={() => setSelectionFeaturesExpanded((e) => !e)}
+                        className="mt-3 text-sm font-medium text-brand-light transition hover:text-brand-light/85"
+                      >
+                        {selectionFeaturesExpanded
+                          ? 'Show less'
+                          : `+${pkg.features.length - 6} more…`}
+                      </button>
+                    ) : null}
+                  </div>
+                ) : null}
+
+                {pkg?.coverage_heading && pkg?.coverage_items?.length ? (
+                  <div className="border-t border-white/[0.06] pt-5">
+                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
+                      {pkg.coverage_heading}
+                    </p>
+                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-400 marker:text-zinc-600">
+                      {pkg.coverage_items.map((item) => (
+                        <li key={item}>{item}</li>
+                      ))}
+                    </ul>
+                  </div>
+                ) : null}
+              </div>
             </div>
           </Section>
         ) : null}
