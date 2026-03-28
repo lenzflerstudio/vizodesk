@@ -3,7 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { portalPublicApi as api } from '../lib/portalPublicApi';
 import { formatCurrency } from '../lib/formatCurrency';
-import { Calendar, MapPin, User, Sparkles, FileText, Wallet, Clapperboard } from 'lucide-react';
+import { Calendar, MapPin, User, Sparkles, FileText, Wallet, Clapperboard, ListChecks } from 'lucide-react';
 import DepositPayPicker from '../components/portal/DepositPayPicker.jsx';
 import ContractSignatureSection from '../components/portal/ContractSignatureSection.jsx';
 import { effectivePackagePaid } from '../lib/effectivePaid';
@@ -269,6 +269,16 @@ export default function PortalBookingView({ token }) {
             ) : null}
           </div>
         </Section>
+
+        {retainerPlan?.length ? (
+          <Section eyebrow="Your plan" title="What you're getting" icon={ListChecks}>
+            <div className="divide-y divide-white/[0.06]">
+              {retainerPlan.map((row, i) => (
+                <DetailRow key={`${i}-${row.label}`} label={row.label} value={row.value} />
+              ))}
+            </div>
+          </Section>
+        ) : null}
 
         {showPackageBlock ? (
           <Section eyebrow="Your selection" icon={Sparkles}>
