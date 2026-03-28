@@ -18,6 +18,7 @@ const {
   ensureDefaultContract,
   packageDetailsForBooking,
   findBookingByPublicToken,
+  persistPortalPackageSnapshot,
 } = require('../lib/publicBookingView');
 const { syncBookingToCloud } = require('../lib/syncBookingToCloud');
 
@@ -331,6 +332,7 @@ router.post('/', auth, (req, res) => {
     }
 
     ensureDefaultContract(bookingId);
+    persistPortalPackageSnapshot(bookingId);
 
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
     console.log('Creating booking locally:', booking.public_token);
@@ -409,6 +411,7 @@ router.put('/:id', auth, (req, res) => {
 
   const updated = db.prepare('SELECT * FROM bookings WHERE id = ?').get(req.params.id);
   ensureDefaultContract(updated.id);
+  persistPortalPackageSnapshot(updated.id);
   if (termsUpdate !== undefined) {
     const ct = db
       .prepare('SELECT id, pdf_path, template_id FROM contracts WHERE booking_id = ?')

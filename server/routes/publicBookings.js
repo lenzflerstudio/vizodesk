@@ -112,6 +112,10 @@ function upsertBookingFromSync(body) {
     payment_status: b.payment_status || 'Unpaid',
     notes: b.notes ?? null,
     package_template_id: packageTemplateId,
+    portal_package_json:
+      b.portal_package_json != null && String(b.portal_package_json).trim() !== ''
+        ? String(b.portal_package_json)
+        : null,
     contract_upload_id: null,
   };
 
@@ -123,7 +127,7 @@ function upsertBookingFromSync(body) {
         terms_and_conditions = ?, deposit_amount = ?, direct_price = ?, square_price = ?,
         remaining_amount = ?, final_due_date = ?, square_deposit = ?, square_remaining = ?,
         payment_method = ?, status = ?, payment_status = ?, notes = ?, package_template_id = ?,
-        contract_upload_id = NULL
+        portal_package_json = ?, contract_upload_id = NULL
       WHERE id = ?
     `).run(
       cols.client_id,
@@ -145,6 +149,7 @@ function upsertBookingFromSync(body) {
       cols.payment_status,
       cols.notes,
       cols.package_template_id,
+      cols.portal_package_json,
       existing.id
     );
     bookingId = existing.id;
@@ -153,8 +158,8 @@ function upsertBookingFromSync(body) {
       INSERT INTO bookings
         (user_id, client_id, event_type, event_date, package, event_time_range, venue_address, terms_and_conditions,
          deposit_amount, direct_price, square_price, remaining_amount, final_due_date, square_deposit, square_remaining,
-         payment_method, status, payment_status, public_token, notes, contract_upload_id, package_template_id)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+         payment_method, status, payment_status, public_token, notes, contract_upload_id, package_template_id, portal_package_json)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, ?)
     `).run(
       cols.user_id,
       cols.client_id,
@@ -176,7 +181,8 @@ function upsertBookingFromSync(body) {
       cols.payment_status,
       public_token,
       cols.notes,
-      cols.package_template_id
+      cols.package_template_id,
+      cols.portal_package_json
     );
     bookingId = r.lastInsertRowid;
   }

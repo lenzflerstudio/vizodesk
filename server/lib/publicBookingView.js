@@ -29,7 +29,8 @@ function parseRetainerEngagementFromNotes(notes) {
   return items.length ? items : null;
 }
 
-function packageDetailsForBooking(booking) {
+/** Resolve from live package_templates only (no booking snapshot). */
+function resolvePackageDetailsFromTemplate(booking) {
   const userId = booking?.user_id;
   if (userId == null) return null;
 
@@ -54,6 +55,37 @@ function packageDetailsForBooking(booking) {
     )
     .get(userId, pkgName, pkgName);
   return serializePackageDetailsPublic(pt);
+}
+
+function packageDetailsFromSnapshotColumn(raw) {
+  if (raw == null) return null;
+  const t = String(raw).trim();
+  if (!t) return null;
+  try {
+    const o = JSON.parse(t);
+    if (!o || typeof o !== 'object') return null;
+    return o;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * For the client portal: prefer frozen JSON saved on the booking (survives cloud sync when template ids differ).
+ */
+function packageDetailsForBooking(booking) {
+  const snap = packageDetailsFromSnapshotColumn(booking?.portal_package_json);
+  if (snap) return snap;
+  return resolvePackageDetailsFromTemplate(booking);
+}
+
+/** Call after create/update booking so portal + sync always have tagline, features, etc. */
+function persistPortalPackageSnapshot(bookingId) {
+  const row = db.prepare('SELECT * FROM bookings WHERE id = ?').get(bookingId);
+  if (!row) return;
+  const details = resolvePackageDetailsFromTemplate(row);
+  const json = details ? JSON.stringify(details) : null;
+  db.prepare('UPDATE bookings SET portal_package_json = ? WHERE id = ?').run(json, bookingId);
 }
 
 /** Every booking is signable: the booking + terms are the agreement (no separate template/PDF required). */
@@ -135,5 +167,6 @@ module.exports = {
   serializePublicBookingPayload,
   ensureDefaultContract,
   packageDetailsForBooking,
+  persistPortalPackageSnapshot,
   parseRetainerEngagementFromNotes,
 };

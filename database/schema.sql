@@ -82,6 +82,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   event_date TEXT NOT NULL,
   package TEXT NOT NULL,
   package_template_id INTEGER,
+  portal_package_json TEXT, -- snapshot of tagline/features for client portal (sync-safe)
   event_time_range TEXT,
   venue_address TEXT,
   deposit_amount REAL DEFAULT 0,

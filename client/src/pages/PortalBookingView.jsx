@@ -216,14 +216,15 @@ export default function PortalBookingView({ token }) {
 
   const pkg = booking.package_details;
   const packageName = String(booking.package || '').trim();
+  const featuresList = Array.isArray(pkg?.features) ? pkg.features : [];
   const showPackageBlock =
     Boolean(packageName) ||
     Boolean(
       pkg &&
         (pkg.display_title ||
           pkg.tagline ||
-          (pkg.features && pkg.features.length) ||
-          (pkg.coverage_items && pkg.coverage_items.length))
+          featuresList.length > 0 ||
+          (Array.isArray(pkg.coverage_items) && pkg.coverage_items.length > 0))
     );
 
   const taglineText = pkg?.tagline?.trim() || null;
@@ -293,7 +294,7 @@ export default function PortalBookingView({ token }) {
                       </span>
                     ) : null}
                     <p className="min-w-0 text-xl font-semibold tracking-tight text-white sm:text-2xl">
-                      {packageName || pkg?.display_title || pkg?.label || 'Your package'}
+                      {pkg?.display_title || packageName || pkg?.label || 'Your package'}
                     </p>
                   </div>
                 </div>
@@ -305,15 +306,15 @@ export default function PortalBookingView({ token }) {
                   </div>
                 ) : null}
 
-                {pkg?.features?.length ? (
+                {featuresList.length ? (
                   <div>
                     <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">What&apos;s included</p>
                     <ul className="mt-3 list-disc space-y-2 pl-5 text-[15px] leading-snug text-zinc-300 marker:text-zinc-600">
-                      {(selectionFeaturesExpanded ? pkg.features : pkg.features.slice(0, 6)).map((item) => (
-                        <li key={item}>{item}</li>
+                      {(selectionFeaturesExpanded ? featuresList : featuresList.slice(0, 6)).map((item) => (
+                        <li key={String(item)}>{item}</li>
                       ))}
                     </ul>
-                    {pkg.features.length > 6 ? (
+                    {featuresList.length > 6 ? (
                       <button
                         type="button"
                         onClick={() => setSelectionFeaturesExpanded((e) => !e)}
@@ -321,7 +322,7 @@ export default function PortalBookingView({ token }) {
                       >
                         {selectionFeaturesExpanded
                           ? 'Show less'
-                          : `+${pkg.features.length - 6} more…`}
+                          : `+${featuresList.length - 6} more…`}
                       </button>
                     ) : null}
                   </div>

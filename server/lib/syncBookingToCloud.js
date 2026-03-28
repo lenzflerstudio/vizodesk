@@ -44,6 +44,7 @@ function buildBookingSyncPayload(bookingId) {
       payment_status: row.payment_status,
       notes: row.notes,
       package_template_id: row.package_template_id,
+      portal_package_json: row.portal_package_json != null ? String(row.portal_package_json) : null,
     },
     contract: contractRow
       ? {
