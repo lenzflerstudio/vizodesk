@@ -197,13 +197,17 @@ export default function PortalBookingView({ token }) {
   const packagePrice = Number(booking.direct_price) || 0;
 
   const paidNet = effectivePackagePaid(booking.payments);
-  const retainerPaid = depositDirect > 0 && paidNet + 0.005 >= depositDirect;
+  /** If there is no deposit row (e.g. retainer “first month not due now”), skip straight to balance phase. */
+  const depositDue = depositDirect > 0.005;
+  const depositPaid = !depositDue || paidNet + 0.005 >= depositDirect;
   const fullyPaid = packagePrice > 0 && paidNet + 0.005 >= packagePrice;
   const remainingOwedDirect = Math.max(0, Math.round((packagePrice - paidNet) * 100) / 100);
   const remainingOwedSquare = Math.round(remainingOwedDirect * 1.03 * 100) / 100;
 
-  const showRemainingScheduled = !retainerPaid;
+  const showRemainingScheduled = !depositPaid;
   const remainingDirectDisplay = showRemainingScheduled ? scheduledRemainingDirect : remainingOwedDirect;
+
+  const paymentPhase = fullyPaid ? 'complete' : !depositPaid ? 'retainer' : 'remaining';
 
   const pkg = booking.package_details;
   const packageName = String(booking.package || '').trim();
@@ -340,50 +344,81 @@ export default function PortalBookingView({ token }) {
               <span className="text-2xl font-semibold tabular-nums text-white">{formatCurrency(packagePrice)}</span>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold text-zinc-400">
-                {retainerPaid ? 'Retainer' : 'Retainer — due now'}
-              </p>
-              <div className="mt-3">
-                {retainerPaid ? (
-                  <PaidPriceRow label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
-                ) : (
-                  <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
-                )}
-              </div>
-            </div>
-
-            {!isRetainerBooking ? (
-              <div>
-                <p className="text-xs font-semibold text-zinc-400">
-                  Remaining balance
-                  {!fullyPaid && booking.final_due_date ? (
-                    <span className="font-normal text-zinc-500">
-                      {' '}
-                      · due {booking.final_due_date} (7 days before event)
-                    </span>
-                  ) : !fullyPaid ? (
-                    <span className="font-normal text-zinc-500"> · due 7 days before event</span>
-                  ) : null}
-                </p>
-                <div className="mt-3">
-                  {fullyPaid ? (
-                    <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-4 text-center">
-                      <p className="text-sm font-semibold text-emerald-400">Paid in full</p>
-                      <p className="mt-1 text-xs text-zinc-500">No balance due on this booking.</p>
+            {isRetainerBooking ? (
+              <>
+                {depositDue ? (
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-400">
+                      {depositPaid ? 'Retainer' : 'Retainer — due now'}
+                    </p>
+                    <div className="mt-3">
+                      {depositPaid ? (
+                        <PaidPriceRow label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                      ) : (
+                        <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                      )}
                     </div>
-                  ) : (
-                    <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
-                  )}
+                  </div>
+                ) : !fullyPaid ? (
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-400">Payment due</p>
+                    <div className="mt-3">
+                      <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
+                    </div>
+                    {booking.final_due_date ? (
+                      <p className="mt-2 text-xs text-zinc-500">Due by {booking.final_due_date}</p>
+                    ) : null}
+                  </div>
+                ) : null}
+              </>
+            ) : (
+              <>
+                {depositDue ? (
+                  <div>
+                    <p className="text-xs font-semibold text-zinc-400">
+                      {depositPaid ? 'Deposit' : 'Deposit — due now'}
+                    </p>
+                    <div className="mt-3">
+                      {depositPaid ? (
+                        <PaidPriceRow label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                      ) : (
+                        <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(depositDirect)} />
+                      )}
+                    </div>
+                  </div>
+                ) : null}
+
+                <div>
+                  <p className="text-xs font-semibold text-zinc-400">
+                    Remaining balance
+                    {!fullyPaid && booking.final_due_date ? (
+                      <span className="font-normal text-zinc-500">
+                        {' '}
+                        · due {booking.final_due_date} (7 days before event)
+                      </span>
+                    ) : !fullyPaid ? (
+                      <span className="font-normal text-zinc-500"> · due 7 days before event</span>
+                    ) : null}
+                  </p>
+                  <div className="mt-3">
+                    {fullyPaid ? (
+                      <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-4 text-center">
+                        <p className="text-sm font-semibold text-emerald-400">Paid in full</p>
+                        <p className="mt-1 text-xs text-zinc-500">No balance due on this booking.</p>
+                      </div>
+                    ) : (
+                      <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
+                    )}
+                  </div>
                 </div>
-              </div>
-            ) : null}
+              </>
+            )}
 
             <p className="text-xs leading-relaxed text-zinc-600">
               {fullyPaid ? (
                 <>Your package is paid in full.</>
               ) : isRetainerBooking ? (
-                <>Bank transfers have no fee. Package total and retainer due now are shown above.</>
+                <>Bank transfers have no fee. Amounts above reflect what you owe on this booking.</>
               ) : (
                 <>Bank transfers have no fee. Package total is shown above.</>
               )}
@@ -427,7 +462,8 @@ export default function PortalBookingView({ token }) {
 
         <Section eyebrow="Pay" title="Payment" icon={Wallet}>
           <DepositPayPicker
-            paymentPhase={fullyPaid ? 'complete' : retainerPaid ? 'remaining' : 'retainer'}
+            paymentPhase={paymentPhase}
+            firstPhaseWording={isRetainerBooking ? 'retainer' : 'deposit'}
             depositDirect={depositDirect}
             depositSquare={depositSquare}
             remainingDirect={remainingOwedDirect}

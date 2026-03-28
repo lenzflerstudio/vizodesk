@@ -90,6 +90,8 @@ function mergePortal(raw) {
 
 export default function DepositPayPicker({
   paymentPhase = 'retainer',
+  /** When the first payment step is active: client-facing copy (event bookings use deposit, retainers use retainer). */
+  firstPhaseWording = 'deposit',
   depositDirect,
   depositSquare,
   remainingDirect,
@@ -112,6 +114,7 @@ export default function DepositPayPicker({
   const direct = formatCurrency(directAmount);
   const card = formatCurrency(squareAmount);
   const isRemaining = phase === 'remaining';
+  const firstNoun = firstPhaseWording === 'retainer' ? 'retainer' : 'deposit';
 
   const resetFlow = () => {
     setStep('pick');
@@ -241,7 +244,7 @@ export default function DepositPayPicker({
         {!hasAnyDetail ? (
           <p className="text-sm text-zinc-500">
             Your photographer hasn&apos;t added {METHOD_LABEL[method]} details here yet. Reach out to them for the email,
-            phone, or $Cashtag to send your {isRemaining ? 'payment' : 'retainer'}.
+            phone, or $Cashtag to send your {isRemaining ? 'payment' : firstNoun}.
           </p>
         ) : null}
 
@@ -257,13 +260,23 @@ export default function DepositPayPicker({
     );
   }
 
-  const pickTitle = isRemaining ? 'Remaining balance — choose a method:' : 'Retainer — choose a method:';
+  const pickTitle = isRemaining
+    ? 'Remaining balance — choose a method:'
+    : firstPhaseWording === 'retainer'
+      ? 'Retainer — choose a method:'
+      : 'Deposit — choose a method:';
   const pickSub = isRemaining
     ? SQUARE_CARD_ENABLED
       ? 'Pay the remaining balance by bank/app transfer or card.'
       : 'Pay the remaining balance by bank or app transfer.'
-    : 'A non-refundable retainer is required to secure your date.';
-  const radioLabel = isRemaining ? 'Remaining balance payment method' : 'Retainer payment method';
+    : firstPhaseWording === 'retainer'
+      ? 'A non-refundable retainer is required to secure your date.'
+      : 'A deposit is required to secure your booking.';
+  const radioLabel = isRemaining
+    ? 'Remaining balance payment method'
+    : firstPhaseWording === 'retainer'
+      ? 'Retainer payment method'
+      : 'Deposit payment method';
 
   return (
     <div className="space-y-2">
@@ -288,7 +301,7 @@ export default function DepositPayPicker({
               type="button"
               role="radio"
               aria-checked={method === 'zelle'}
-              aria-label={`Zelle, ${isRemaining ? 'remaining balance' : 'retainer'} ${direct}`}
+              aria-label={`Zelle, ${isRemaining ? 'remaining balance' : firstNoun} ${direct}`}
               onClick={() => setMethod('zelle')}
               className={`${pickTileClass(method === 'zelle')} h-[4.25rem] w-[4.25rem] sm:h-[4.5rem] sm:w-[4.5rem] p-2.5`}
             >
@@ -298,7 +311,7 @@ export default function DepositPayPicker({
               type="button"
               role="radio"
               aria-checked={method === 'cashapp'}
-              aria-label={`Cash App, ${isRemaining ? 'remaining balance' : 'retainer'} ${direct}`}
+              aria-label={`Cash App, ${isRemaining ? 'remaining balance' : firstNoun} ${direct}`}
               onClick={() => setMethod('cashapp')}
               className={`${pickTileClass(method === 'cashapp')} h-[4.25rem] w-[4.25rem] sm:h-[4.5rem] sm:w-[4.5rem] p-2.5`}
             >
@@ -308,7 +321,7 @@ export default function DepositPayPicker({
               type="button"
               role="radio"
               aria-checked={method === 'venmo'}
-              aria-label={`Venmo, ${isRemaining ? 'remaining balance' : 'retainer'} ${direct}`}
+              aria-label={`Venmo, ${isRemaining ? 'remaining balance' : firstNoun} ${direct}`}
               onClick={() => setMethod('venmo')}
               className={`${pickTileClass(method === 'venmo')} h-[4.25rem] w-[4.25rem] sm:h-[4.5rem] sm:w-[4.5rem] p-2.5`}
             >
@@ -336,7 +349,7 @@ export default function DepositPayPicker({
               type="button"
               role="radio"
               aria-checked={method === 'square'}
-              aria-label={`Square or credit card, ${isRemaining ? 'remaining balance' : 'retainer'} ${card}`}
+              aria-label={`Square or credit card, ${isRemaining ? 'remaining balance' : firstNoun} ${card}`}
               onClick={() => setMethod('square')}
               className={`${pickTileClass(method === 'square')} flex w-full flex-row gap-4 px-4 py-3.5 sm:py-4`}
             >
