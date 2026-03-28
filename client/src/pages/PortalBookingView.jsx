@@ -7,6 +7,10 @@ import { Calendar, MapPin, User, Sparkles, FileText, Wallet, Clapperboard, ListC
 import DepositPayPicker from '../components/portal/DepositPayPicker.jsx';
 import ContractSignatureSection from '../components/portal/ContractSignatureSection.jsx';
 import { effectivePackagePaid } from '../lib/effectivePaid';
+import {
+  coverageItemsArray,
+  featuresWithoutCoverageHeadingDuplicate,
+} from '../lib/packageDisplay';
 
 function PortalShell({ children }) {
   return (
@@ -216,7 +220,9 @@ export default function PortalBookingView({ token }) {
 
   const pkg = booking.package_details;
   const packageName = String(booking.package || '').trim();
-  const featuresList = Array.isArray(pkg?.features) ? pkg.features : [];
+  const featuresList = featuresWithoutCoverageHeadingDuplicate(pkg?.features, pkg?.coverage_heading);
+  const coverageItemsList = coverageItemsArray(pkg);
+  const coverageHeadingText = String(pkg?.coverage_heading || '').trim() || null;
   const showPackageBlock =
     Boolean(packageName) ||
     Boolean(
@@ -224,7 +230,8 @@ export default function PortalBookingView({ token }) {
         (pkg.display_title ||
           pkg.tagline ||
           featuresList.length > 0 ||
-          (Array.isArray(pkg.coverage_items) && pkg.coverage_items.length > 0))
+          coverageItemsList.length > 0 ||
+          coverageHeadingText)
     );
 
   const taglineText = pkg?.tagline?.trim() || null;
@@ -328,16 +335,18 @@ export default function PortalBookingView({ token }) {
                   </div>
                 ) : null}
 
-                {pkg?.coverage_heading && pkg?.coverage_items?.length ? (
+                {coverageHeadingText || coverageItemsList.length > 0 ? (
                   <div className="border-t border-white/[0.06] pt-5">
-                    <p className="text-[11px] font-semibold uppercase tracking-[0.2em] text-zinc-500">
-                      {pkg.coverage_heading}
+                    <p className="text-sm font-semibold leading-snug text-zinc-200">
+                      {coverageHeadingText || 'Coverage'}
                     </p>
-                    <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-400 marker:text-zinc-600">
-                      {pkg.coverage_items.map((item) => (
-                        <li key={item}>{item}</li>
-                      ))}
-                    </ul>
+                    {coverageItemsList.length > 0 ? (
+                      <ul className="mt-3 list-disc space-y-2 pl-5 text-sm leading-relaxed text-zinc-400 marker:text-zinc-600">
+                        {coverageItemsList.map((item) => (
+                          <li key={String(item)}>{item}</li>
+                        ))}
+                      </ul>
+                    ) : null}
                   </div>
                 ) : null}
               </div>

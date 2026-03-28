@@ -3,6 +3,10 @@ import { api } from '../lib/api';
 import { Package, Pencil, Trash2, Plus, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../lib/formatCurrency';
+import {
+  coverageItemsArray,
+  featuresWithoutCoverageHeadingDuplicate,
+} from '../lib/packageDisplay';
 
 /** Avoid showing literal "null" from bad API/DB values when optional fields are empty. */
 function cleanDisplayText(v) {
@@ -178,7 +182,11 @@ export default function Packages() {
         </div>
       ) : (
         <ul className="space-y-3">
-          {list.map((row) => (
+          {list.map((row) => {
+            const covItems = coverageItemsArray(row);
+            const covHeading = cleanDisplayText(row.coverage_heading);
+            const featDisplay = featuresWithoutCoverageHeadingDuplicate(row.features, row.coverage_heading);
+            return (
             <li key={row.id} className="card flex flex-col sm:flex-row sm:items-start gap-4 border border-surface-border">
               <div className="flex gap-3 flex-1 min-w-0">
                 {cleanDisplayText(row.icon) ? (
@@ -196,15 +204,32 @@ export default function Packages() {
                   {cleanDisplayText(row.tagline) ? (
                     <p className="text-slate-500 text-sm mt-1">{cleanDisplayText(row.tagline)}</p>
                   ) : null}
-                  {row.features?.length ? (
+                  {featDisplay.length ? (
                     <ul className="mt-2 text-sm text-slate-400 list-disc list-inside space-y-0.5">
-                      {row.features.slice(0, 4).map((f) => (
+                      {featDisplay.slice(0, 4).map((f) => (
                         <li key={f}>{f}</li>
                       ))}
-                      {row.features.length > 4 ? (
-                        <li className="text-slate-600 list-none -ml-4">+{row.features.length - 4} more…</li>
+                      {featDisplay.length > 4 ? (
+                        <li className="text-slate-600 list-none -ml-4">+{featDisplay.length - 4} more…</li>
                       ) : null}
                     </ul>
+                  ) : null}
+                  {covHeading || covItems.length > 0 ? (
+                    <div className="mt-3 pt-3 border-t border-surface-border">
+                      <p className="text-sm font-semibold text-slate-300">
+                        {covHeading || 'Coverage'}
+                      </p>
+                      {covItems.length > 0 ? (
+                        <ul className="mt-2 text-sm text-slate-400 list-disc list-inside space-y-0.5">
+                          {covItems.slice(0, 6).map((c) => (
+                            <li key={c}>{c}</li>
+                          ))}
+                          {covItems.length > 6 ? (
+                            <li className="text-slate-600 list-none -ml-4">+{covItems.length - 6} more…</li>
+                          ) : null}
+                        </ul>
+                      ) : null}
+                    </div>
                   ) : null}
                   {row.suggested_price != null ? (
                     <p className="text-xs text-slate-600 mt-2">
@@ -234,7 +259,8 @@ export default function Packages() {
                 </button>
               </div>
             </li>
-          ))}
+            );
+          })}
         </ul>
       )}
 
