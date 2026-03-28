@@ -39,6 +39,7 @@ function uid() {
 }
 
 function buildPreviewHtml({ form, settings, subtotal, discountAmount, total, businessLines, clientName }) {
+  const logoForPreview = form.logo_data_url || settings?.business_logo_data_url;
   const accent = settings?.brand_color && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(String(settings.brand_color))
     ? String(settings.brand_color).toLowerCase()
     : '#6d28d9';
@@ -72,7 +73,7 @@ function buildPreviewHtml({ form, settings, subtotal, discountAmount, total, bus
   </style></head><body>
   <div class="no-print" style="margin-bottom:16px"><button type="button" onclick="window.print()">Print</button></div>
   <div class="grid2">
-    <div>${form.logo_data_url ? `<img src="${form.logo_data_url}" alt="" style="max-height:72px;object-fit:contain"/>` : ''}</div>
+    <div>${logoForPreview ? `<img src="${logoForPreview}" alt="" style="max-height:72px;object-fit:contain"/>` : ''}</div>
     <div style="text-align:right">
       <h1>${escapeHtml((form.title || 'Invoice').toUpperCase())}</h1>
       ${form.summary ? `<p class="sub">${escapeHtml(form.summary)}</p>` : ''}

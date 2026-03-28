@@ -95,6 +95,12 @@ export const api = {
   updatePackage: (id, data) => request('PUT', `/packages/${id}`, data),
   deletePackage: (id) => request('DELETE', `/packages/${id}`),
 
+  // Portal terms presets (New Booking — terms & conditions textarea)
+  getBookingTermsTemplates: () => request('GET', '/booking-terms-templates'),
+  createBookingTermsTemplate: (data) => request('POST', '/booking-terms-templates', data),
+  updateBookingTermsTemplate: (id, data) => request('PUT', `/booking-terms-templates/${id}`, data),
+  deleteBookingTermsTemplate: (id) => request('DELETE', `/booking-terms-templates/${id}`),
+
   // Bookings
   getBookings: () => request('GET', '/bookings'),
   getBooking: (id) => request('GET', `/bookings/${id}`),

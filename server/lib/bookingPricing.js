@@ -29,6 +29,32 @@ function computeBookingPricing(packagePrice, eventDateStr) {
   };
 }
 
+/** Monthly retainer: first month due now → full month as deposit; otherwise full month as remaining balance. */
+function computeRetainerBookingPricing(monthlyPrice, eventDateStr, firstMonthDueNow) {
+  const monthly = roundMoney(monthlyPrice);
+  const finalDueDate = finalDueDateFromEvent(eventDateStr);
+  if (firstMonthDueNow) {
+    const squareDeposit = roundMoney(monthly * (1 + CARD_MARKUP));
+    return {
+      deposit_amount: monthly,
+      remaining_amount: 0,
+      square_deposit: squareDeposit,
+      square_remaining: 0,
+      square_price: squareDeposit,
+      final_due_date: finalDueDate,
+    };
+  }
+  const squareRemaining = roundMoney(monthly * (1 + CARD_MARKUP));
+  return {
+    deposit_amount: 0,
+    remaining_amount: monthly,
+    square_deposit: 0,
+    square_remaining: squareRemaining,
+    square_price: squareRemaining,
+    final_due_date: finalDueDate,
+  };
+}
+
 /** Event date (YYYY-MM-DD) → balance due date (7 days before), same format */
 function finalDueDateFromEvent(eventDateStr) {
   if (!eventDateStr || typeof eventDateStr !== 'string') return null;
@@ -62,6 +88,7 @@ module.exports = {
   DEPOSIT_RATE,
   roundMoney,
   computeBookingPricing,
+  computeRetainerBookingPricing,
   finalDueDateFromEvent,
   enrichBookingRow,
 };

@@ -48,6 +48,7 @@ app.post(
 );
 app.use('/api/bookings', require('./routes/bookings'));
 app.use('/api/contracts', require('./routes/contracts'));
+app.use('/api/booking-terms-templates', require('./routes/bookingTermsTemplates'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/email', require('./routes/email'));

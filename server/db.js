@@ -93,6 +93,7 @@ async function init() {
   migrateInvoices();
   migrateInvoiceExtensions();
   migratePackageTemplates();
+  migrateBookingTermsTemplates();
   migrateUserPaymentPortal();
 
   // Seed default contract templates if none exist
@@ -281,6 +282,7 @@ function migrateUserSettingsColumns() {
   add('tax_sales_tax_rate', 'REAL DEFAULT 0');
   add('gmail_sender_address', 'TEXT');
   add('gmail_app_password_enc', 'TEXT');
+  add('business_logo_data_url', 'TEXT');
   saveDb();
 }
 
@@ -497,6 +499,21 @@ function migratePackageTemplates() {
     }
   }
 
+  saveDb();
+}
+
+function migrateBookingTermsTemplates() {
+  _db.run(`
+    CREATE TABLE IF NOT EXISTS booking_terms_templates (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      user_id INTEGER NOT NULL,
+      name TEXT NOT NULL,
+      content TEXT NOT NULL,
+      sort_order INTEGER DEFAULT 0,
+      created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+    );
+  `);
   saveDb();
 }
 

@@ -5,7 +5,12 @@ const { randomUUID } = require('crypto');
 const router = express.Router();
 const auth = require('../middleware/auth');
 const db = require('../db');
-const { computeBookingPricing, enrichBookingRow, roundMoney } = require('../lib/bookingPricing');
+const {
+  computeBookingPricing,
+  computeRetainerBookingPricing,
+  enrichBookingRow,
+  roundMoney,
+} = require('../lib/bookingPricing');
 const contractUploadService = require('../services/contractUploadService');
 const { getPaymentPortalRow, serializePaymentPortal } = require('../lib/paymentPortalHelper');
 const {
@@ -15,6 +20,38 @@ const {
   findBookingByPublicToken,
 } = require('../lib/publicBookingView');
 const { syncBookingToCloud } = require('../lib/syncBookingToCloud');
+
+function isTruthyBody(v) {
+  return v === true || v === 'true' || v === 1 || v === '1';
+}
+
+function buildRetainerNotesAppend(body, existingNotes) {
+  const lines = ['--- Retainer engagement ---'];
+  if (body.retainer_service_type) {
+    lines.push(`Service type: ${String(body.retainer_service_type).trim()}`);
+  }
+  if (
+    body.retainer_social_media_management !== undefined &&
+    body.retainer_social_media_management !== null &&
+    body.retainer_social_media_management !== ''
+  ) {
+    lines.push(
+      isTruthyBody(body.retainer_social_media_management) ? 'Social media management: Yes' : 'Social media management: No'
+    );
+  }
+  if (body.retainer_billing_cycle) {
+    lines.push(`Billing cycle: ${String(body.retainer_billing_cycle).trim()}`);
+  }
+  if (body.retainer_shoot_frequency) {
+    lines.push(`Shoot frequency: ${String(body.retainer_shoot_frequency).trim()}`);
+  }
+  if (body.retainer_monthly_deliverables) {
+    lines.push(`Monthly deliverables: ${String(body.retainer_monthly_deliverables).trim()}`);
+  }
+  const block = lines.join('\n');
+  const rest = existingNotes && String(existingNotes).trim();
+  return rest ? `${block}\n\n${rest}` : block;
+}
 
 function parsePackageTemplateId(body, userId) {
   if (!Object.prototype.hasOwnProperty.call(body, 'package_template_id')) return undefined;
@@ -242,7 +279,17 @@ router.post('/', auth, (req, res) => {
     }
     const packageTemplateId = templateIdParsed === undefined ? null : templateIdParsed;
 
-    const p = computeBookingPricing(packagePrice, event_date);
+    const retainerMode = isTruthyBody(req.body.retainer_mode);
+    const firstMonthDueNow = isTruthyBody(req.body.retainer_first_month_due_now);
+
+    let notesOut = notes != null && String(notes).trim() ? String(notes).trim() : null;
+    if (retainerMode) {
+      notesOut = buildRetainerNotesAppend(req.body, notesOut);
+    }
+
+    const p = retainerMode
+      ? computeRetainerBookingPricing(packagePrice, event_date, firstMonthDueNow)
+      : computeBookingPricing(packagePrice, event_date);
     const publicToken = randomUUID();
 
     const result = db.prepare(`
@@ -256,7 +303,7 @@ router.post('/', auth, (req, res) => {
       req.userId, finalClientId, event_type, event_date, pkg || '', eventTimeRange, venueAddress, termsAndConditions,
       p.deposit_amount, packagePrice, p.square_price,
       p.remaining_amount, p.final_due_date, p.square_deposit, p.square_remaining,
-      payment_method || 'direct', publicToken, notes || null,
+      payment_method || 'direct', publicToken, notesOut,
       contractUploadId,
       packageTemplateId
     );

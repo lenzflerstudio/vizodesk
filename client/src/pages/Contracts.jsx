@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { api } from '../lib/api';
 import { openPdfBlobInNewTab } from '../lib/openPdfPreview';
-import { FileText, Upload, Eye, Trash2, Copy, Mail } from 'lucide-react';
+import { FileText, Upload, Eye, Trash2, Copy, Mail, ScrollText, Pencil, Plus } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { useDelayedLoading } from '../hooks/useDelayedLoading';
 import { useAuth } from '../contexts/AuthContext';
@@ -28,10 +28,34 @@ export default function Contracts() {
   const [deleteUploadId, setDeleteUploadId] = useState(null);
   const [deletingUpload, setDeletingUpload] = useState(false);
   const [emailDocs, setEmailDocs] = useState(null);
+  const [bookingTermsTemplates, setBookingTermsTemplates] = useState([]);
+  const [bookingTermsReady, setBookingTermsReady] = useState(false);
+  /** null | 'new' | numeric id */
+  const [termsModalId, setTermsModalId] = useState(null);
+  const [termsDraft, setTermsDraft] = useState({ name: '', content: '' });
+  const [termsSaving, setTermsSaving] = useState(false);
+  const [deleteTermsId, setDeleteTermsId] = useState(null);
+  const [deletingTerms, setDeletingTerms] = useState(false);
   const fileRef = useRef(null);
   const showSpinner = useDelayedLoading(loading);
 
-  const loadAll = () =>
+  const loadBookingTerms = () =>
+    api
+      .getBookingTermsTemplates()
+      .then((rows) => {
+        setBookingTermsTemplates(rows);
+        setBookingTermsReady(true);
+        return rows;
+      })
+      .catch(() => {
+        toast.error('Failed to load portal terms presets');
+        setBookingTermsTemplates([]);
+        setBookingTermsReady(true);
+      });
+
+  const loadAll = () => {
+    setLoading(true);
+    loadBookingTerms();
     Promise.all([api.getContracts(), api.getContractUploads(), api.getInvoices(), api.getSettings()])
       .then(([c, u, inv, s]) => {
         setContracts(c);
@@ -41,6 +65,7 @@ export default function Contracts() {
       })
       .catch(() => toast.error('Failed to load data'))
       .finally(() => setLoading(false));
+  };
 
   useEffect(() => {
     loadAll();
@@ -101,6 +126,61 @@ export default function Contracts() {
       toast.error(err.message || 'Delete failed');
     } finally {
       setDeletingUpload(false);
+    }
+  };
+
+  const openTermsCreate = () => {
+    setTermsDraft({ name: '', content: '' });
+    setTermsModalId('new');
+  };
+
+  const openTermsEdit = (row) => {
+    setTermsDraft({ name: row.name || '', content: row.content || '' });
+    setTermsModalId(row.id);
+  };
+
+  const saveTermsPreset = async () => {
+    const name = termsDraft.name.trim();
+    const content = termsDraft.content.trim();
+    if (!name) {
+      toast.error('Name is required');
+      return;
+    }
+    if (!content) {
+      toast.error('Terms text is required');
+      return;
+    }
+    setTermsSaving(true);
+    try {
+      if (termsModalId === 'new') {
+        await api.createBookingTermsTemplate({ name, content });
+        toast.success('Saved preset');
+      } else {
+        await api.updateBookingTermsTemplate(termsModalId, { name, content });
+        toast.success('Updated preset');
+      }
+      await loadBookingTerms();
+      setTermsModalId(null);
+    } catch (err) {
+      toast.error(err.message || 'Save failed');
+    } finally {
+      setTermsSaving(false);
+    }
+  };
+
+  const confirmDeleteTerms = async () => {
+    if (deleteTermsId == null) return;
+    const id = deleteTermsId;
+    setDeletingTerms(true);
+    try {
+      await api.deleteBookingTermsTemplate(id);
+      toast.success('Deleted');
+      await loadBookingTerms();
+      setDeleteTermsId(null);
+    } catch (err) {
+      toast.error(err.message || 'Delete failed');
+    } finally {
+      setDeletingTerms(false);
     }
   };
 
@@ -171,6 +251,95 @@ export default function Contracts() {
         </div>
       )}
 
+      {deleteTermsId != null && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="delete-terms-title"
+        >
+          <div className="card w-full max-w-md border border-surface-border shadow-xl">
+            <h2 id="delete-terms-title" className="text-lg font-semibold text-white mb-2">
+              Delete this terms preset?
+            </h2>
+            <p className="text-sm text-slate-400 mb-5">
+              Existing bookings keep the text they already have. New bookings will no longer see this option in the
+              dropdown.
+            </p>
+            <div className="flex gap-3 justify-end">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={deletingTerms}
+                onClick={() => setDeleteTermsId(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-primary bg-red-600 hover:bg-red-500 border-0"
+                disabled={deletingTerms}
+                onClick={confirmDeleteTerms}
+              >
+                {deletingTerms ? 'Deleting…' : 'Delete'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {termsModalId != null && (
+        <div
+          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/60 backdrop-blur-sm p-4"
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="terms-editor-title"
+        >
+          <div className="card w-full max-w-2xl max-h-[90vh] flex flex-col border border-surface-border shadow-xl">
+            <h2 id="terms-editor-title" className="text-lg font-semibold text-white mb-1 shrink-0">
+              {termsModalId === 'new' ? 'New portal terms preset' : 'Edit portal terms preset'}
+            </h2>
+            <p className="text-xs text-slate-500 mb-4 shrink-0">
+              This text is for the client booking page (sign below pricing), not PDF contracts.
+            </p>
+            <div className="space-y-3 flex-1 min-h-0 flex flex-col">
+              <div>
+                <label className="label">Preset name</label>
+                <input
+                  className="input"
+                  placeholder="e.g. Photo & video — standard"
+                  value={termsDraft.name}
+                  onChange={(e) => setTermsDraft((d) => ({ ...d, name: e.target.value }))}
+                />
+              </div>
+              <div className="flex-1 min-h-0 flex flex-col">
+                <label className="label">Terms text</label>
+                <textarea
+                  className="input min-h-[200px] flex-1 resize-y font-sans leading-relaxed"
+                  rows={12}
+                  value={termsDraft.content}
+                  onChange={(e) => setTermsDraft((d) => ({ ...d, content: e.target.value }))}
+                  spellCheck
+                />
+              </div>
+            </div>
+            <div className="flex gap-3 justify-end mt-4 pt-4 border-t border-surface-border shrink-0">
+              <button
+                type="button"
+                className="btn-secondary"
+                disabled={termsSaving}
+                onClick={() => setTermsModalId(null)}
+              >
+                Cancel
+              </button>
+              <button type="button" className="btn-primary" disabled={termsSaving} onClick={saveTermsPreset}>
+                {termsSaving ? 'Saving…' : 'Save'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <div>
         <h1 className="text-2xl font-bold text-white">Contracts</h1>
         <p className="text-slate-500 text-sm mt-0.5">
@@ -224,6 +393,64 @@ export default function Contracts() {
                     <Eye size={16} />
                   </button>
                   <button type="button" onClick={() => setDeleteUploadId(u.id)} className="btn-ghost text-sm p-2 text-red-400 hover:text-red-300" title="Delete">
+                    <Trash2 size={16} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+
+      {/* Portal terms presets (client booking page) */}
+      <div className="card space-y-4">
+        <div className="flex flex-wrap items-start justify-between gap-3 border-b border-surface-border pb-3">
+          <div className="flex gap-3">
+            <ScrollText className="text-brand-light shrink-0 mt-0.5" size={20} />
+            <div>
+              <h2 className="text-sm font-semibold text-slate-300">Portal terms presets</h2>
+              <p className="text-xs text-slate-500 mt-1 max-w-xl">
+                Saved sets of terms for the client booking link (below pricing, with signature). Pick one on{' '}
+                <span className="text-slate-400">New Booking</span> — you can still edit the text before creating the
+                booking.
+              </p>
+            </div>
+          </div>
+          <button type="button" className="btn-secondary inline-flex items-center gap-2 shrink-0" onClick={openTermsCreate}>
+            <Plus size={16} />
+            Add preset
+          </button>
+        </div>
+        {!bookingTermsReady ? (
+          <p className="text-sm text-slate-600 py-2">Loading presets…</p>
+        ) : bookingTermsTemplates.length === 0 ? (
+          <p className="text-sm text-slate-600 py-2">No presets yet. Use Add preset to create one.</p>
+        ) : (
+          <ul className="divide-y divide-surface-border rounded-lg border border-surface-border overflow-hidden">
+            {bookingTermsTemplates.map((t) => (
+              <li
+                key={t.id}
+                className="flex flex-wrap items-center justify-between gap-2 px-4 py-3 bg-surface-overlay/30 hover:bg-surface-overlay/50"
+              >
+                <div className="min-w-0">
+                  <p className="font-medium text-slate-200 truncate">{t.name}</p>
+                  <p className="text-xs text-slate-500 line-clamp-2 mt-0.5">{t.content}</p>
+                </div>
+                <div className="flex gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => openTermsEdit(t)}
+                    className="btn-ghost text-sm p-2"
+                    title="Edit"
+                  >
+                    <Pencil size={16} />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setDeleteTermsId(t.id)}
+                    className="btn-ghost text-sm p-2 text-red-400 hover:text-red-300"
+                    title="Delete"
+                  >
                     <Trash2 size={16} />
                   </button>
                 </div>

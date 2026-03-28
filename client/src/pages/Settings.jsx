@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useAuth } from '../contexts/AuthContext';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
@@ -174,6 +174,8 @@ export default function Settings() {
   const [businessWebsite, setBusinessWebsite] = useState('');
   const [companyType, setCompanyType] = useState('Photography');
   const [brandColor, setBrandColor] = useState('#a21caf');
+  const [businessLogoDataUrl, setBusinessLogoDataUrl] = useState('');
+  const businessLogoInputRef = useRef(null);
   const [portalUrl, setPortalUrl] = useState('');
 
   const [errCompanyName, setErrCompanyName] = useState('');
@@ -236,6 +238,9 @@ export default function Settings() {
         setBusinessWebsite(s.business_website || '');
         setCompanyType(s.company_type || 'Photography');
         setBrandColor(s.brand_color || '#a21caf');
+        setBusinessLogoDataUrl(
+          typeof s.business_logo_data_url === 'string' ? s.business_logo_data_url : ''
+        );
         setPortalUrl(s.client_portal_base_url || '');
         setPaymentPortal(
           s.payment_portal
@@ -323,13 +328,40 @@ export default function Settings() {
   const saveBrandLookOnly = async () => {
     setSavingBrandLook(true);
     try {
-      await api.updateSettings({ brand_color: brandColor });
-      toast.success('Brand color saved');
+      await api.updateSettings({
+        brand_color: brandColor,
+        business_logo_data_url: businessLogoDataUrl.trim() ? businessLogoDataUrl : '',
+      });
+      toast.success('Brand & logo saved');
     } catch (e) {
       toast.error(e.message || 'Failed to save');
     } finally {
       setSavingBrandLook(false);
     }
+  };
+
+  const onBusinessLogoFile = (e) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    if (!/^image\/(jpeg|png|gif|webp)$/i.test(file.type)) {
+      toast.error('Use JPG, PNG, GIF, or WebP');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast.error('Logo max 5MB');
+      return;
+    }
+    const r = new FileReader();
+    r.onload = () => {
+      const url = String(r.result || '');
+      if (url.length > 580000) {
+        toast.error('Logo is too large after encoding — use a smaller image');
+        return;
+      }
+      setBusinessLogoDataUrl(url);
+    };
+    r.readAsDataURL(file);
   };
 
   const patchPaymentPortal = (key, partial) => {
@@ -652,10 +684,6 @@ export default function Settings() {
     toast('Theme customization is coming soon.');
   };
 
-  const logoPlaceholder = () => {
-    toast('Logo upload is coming soon.');
-  };
-
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[40vh]">
@@ -902,53 +930,70 @@ export default function Settings() {
                 </section>
 
                 <section className="card">
-                  <h2 className="text-lg font-semibold text-white mb-4">Brand elements</h2>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mb-6">
-                    <button
-                      type="button"
-                      onClick={logoPlaceholder}
-                      className="aspect-square max-w-[200px] rounded-xl border-2 border-dashed border-surface-border hover:border-slate-500 flex flex-col items-center justify-center gap-2 text-slate-500 text-sm transition-colors"
-                    >
-                      <ImageIcon size={28} />
-                      <span>Main logo</span>
-                      <Upload size={14} className="opacity-60" />
-                    </button>
-                    <button
-                      type="button"
-                      onClick={logoPlaceholder}
-                      className="h-28 max-w-md rounded-xl border-2 border-dashed border-surface-border hover:border-slate-500 flex flex-col items-center justify-center gap-2 text-slate-500 text-sm transition-colors"
-                    >
-                      <span>Secondary logo</span>
-                      <span className="text-xs">YOUR LOGO HERE</span>
-                    </button>
-                  </div>
-                  <div className="mb-6">
-                    <label className="label">Brand color</label>
-                    <p className="text-xs text-slate-500 mb-2">Used for buttons and client-facing accents.</p>
-                    <div className="flex items-center gap-3 flex-wrap">
+                  <h2 className="text-lg font-semibold text-white mb-1">Brand elements</h2>
+                  <p className="text-xs text-slate-500 mb-5">
+                    Logo appears on booking payment receipt PDFs and on printed invoices when an invoice has no its own logo.
+                  </p>
+                  <div className="flex flex-col sm:flex-row gap-6 mb-6">
+                    <div className="flex-shrink-0">
                       <input
-                        type="color"
-                        value={brandColor.length === 7 ? brandColor : '#a21caf'}
-                        onChange={(e) => setBrandColor(e.target.value)}
-                        className="w-12 h-12 rounded-lg border border-surface-border cursor-pointer bg-transparent"
-                        aria-label="Pick brand color"
+                        ref={businessLogoInputRef}
+                        type="file"
+                        accept="image/jpeg,image/png,image/gif,image/webp"
+                        className="hidden"
+                        onChange={onBusinessLogoFile}
                       />
-                      <input
-                        className="input max-w-[140px] font-mono text-sm"
-                        value={brandColor}
-                        onChange={(e) => setBrandColor(e.target.value)}
-                        placeholder="#912ea8"
-                      />
+                      <button
+                        type="button"
+                        onClick={() => businessLogoInputRef.current?.click()}
+                        className="w-[200px] min-h-[140px] rounded-xl border-2 border-dashed border-surface-border hover:border-slate-500 flex flex-col items-center justify-center gap-2 text-slate-500 text-sm transition-colors p-4"
+                      >
+                        {businessLogoDataUrl ? (
+                          <img src={businessLogoDataUrl} alt="" className="max-h-24 max-w-full object-contain" />
+                        ) : (
+                          <>
+                            <ImageIcon size={28} />
+                            <span>Company logo</span>
+                            <Upload size={14} className="opacity-60" />
+                          </>
+                        )}
+                      </button>
+                      {businessLogoDataUrl ? (
+                        <button
+                          type="button"
+                          className="mt-2 text-xs text-red-400 hover:text-red-300"
+                          onClick={() => setBusinessLogoDataUrl('')}
+                        >
+                          Remove logo
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <label className="label">Brand color</label>
+                      <p className="text-xs text-slate-500 mb-2">
+                        Used for buttons, invoice table headers, and receipt PDF accents.
+                      </p>
+                      <div className="flex items-center gap-3 flex-wrap">
+                        <input
+                          type="color"
+                          value={brandColor.length === 7 ? brandColor : '#a21caf'}
+                          onChange={(e) => setBrandColor(e.target.value)}
+                          className="w-12 h-12 rounded-lg border border-surface-border cursor-pointer bg-transparent"
+                          aria-label="Pick brand color"
+                        />
+                        <input
+                          className="input max-w-[140px] font-mono text-sm"
+                          value={brandColor}
+                          onChange={(e) => setBrandColor(e.target.value)}
+                          placeholder="#912ea8"
+                        />
+                      </div>
                     </div>
                   </div>
-                  <p className="text-xs text-slate-600 mb-3">Additional images and a full media library can be added in a future update.</p>
                   <div className="flex flex-wrap gap-3">
-                    <button type="button" onClick={logoPlaceholder} className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-slate-500/50 text-slate-200 text-sm hover:bg-surface-overlay">
-                      Manage images
-                    </button>
                     <button type="button" className="btn-primary" disabled={savingBrandLook} onClick={saveBrandLookOnly}>
                       {savingBrandLook ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
-                      {savingBrandLook ? 'Saving…' : 'Save brand color'}
+                      {savingBrandLook ? 'Saving…' : 'Save brand & logo'}
                     </button>
                   </div>
                 </section>

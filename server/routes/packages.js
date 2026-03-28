@@ -217,6 +217,7 @@ router.delete('/:id', auth, (req, res) => {
 module.exports = router;
 module.exports.serializePackageDetailsPublic = function serializePackageDetailsPublic(row) {
   if (!row) return null;
+  const label = normalizeLabel(row.label);
   const features = parseJsonArray(row.features);
   const coverage_items = parseJsonArray(row.coverage_items);
   const display_title = normalizeOptionalText(row.display_title);
@@ -224,6 +225,7 @@ module.exports.serializePackageDetailsPublic = function serializePackageDetailsP
   const icon = normalizeOptionalText(row.icon);
   const coverage_heading = normalizeOptionalText(row.coverage_heading);
   const hasContent =
+    !!label ||
     display_title ||
     tagline ||
     icon ||
@@ -231,6 +233,7 @@ module.exports.serializePackageDetailsPublic = function serializePackageDetailsP
     (coverage_heading && coverage_items.length > 0);
   if (!hasContent) return null;
   return {
+    label: label || null,
     display_title,
     icon,
     tagline,

@@ -88,10 +88,13 @@ export function buildInvoicePrintHtml(invoice, settings) {
   const title = escapeHtml((inv.title || 'Invoice').toUpperCase());
   const invNo = escapeHtml(inv.invoice_number || `#${inv.id}`);
 
-  const logoSrc =
+  const logoRaw =
     typeof inv.logo_data_url === 'string' && inv.logo_data_url.startsWith('data:image/')
-      ? inv.logo_data_url.replace(/"/g, '&quot;')
-      : '';
+      ? inv.logo_data_url
+      : typeof s.business_logo_data_url === 'string' && s.business_logo_data_url.startsWith('data:image/')
+        ? s.business_logo_data_url
+        : '';
+  const logoSrc = logoRaw.replace(/"/g, '&quot;');
 
   return `<!DOCTYPE html><html><head><meta charset="utf-8"/>
   <title>Invoice ${invNo}</title>

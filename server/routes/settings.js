@@ -16,11 +16,14 @@ const {
   INTEGRATION_BODY_KEYS,
 } = require('../lib/integrationSecrets');
 
+const MAX_BUSINESS_LOGO_CHARS = 600000;
+
 const USER_KEYS = new Set([
   'business_name',
   'business_email',
   'business_phone',
   'business_website',
+  'business_logo_data_url',
   'company_type',
   'brand_color',
   'email_signature',
@@ -82,6 +85,7 @@ function defaultUserRow() {
     business_email: '',
     business_phone: '',
     business_website: '',
+    business_logo_data_url: '',
     company_type: 'Photography',
     brand_color: '#a21caf',
     notify_email: 1,
@@ -137,6 +141,20 @@ function mergeUserRow(current, body) {
       const s = val.trim().toUpperCase().slice(0, 2);
       if (s.length === 0) next[key] = '';
       else next[key] = /^[A-Z]{2}$/.test(s) ? s : next[key];
+    } else if (key === 'business_logo_data_url') {
+      if (val === null || val === undefined || val === '') {
+        next[key] = '';
+      } else if (typeof val === 'string') {
+        const s = val.trim();
+        if (!s) next[key] = '';
+        else if (!/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(s)) {
+          /* ignore invalid */
+        } else if (s.length > MAX_BUSINESS_LOGO_CHARS) {
+          /* ignore oversized */
+        } else {
+          next[key] = s;
+        }
+      }
     } else if (typeof val === 'string') {
       next[key] = val.trim();
     } else if (val != null) {
@@ -159,19 +177,21 @@ function persistUserRow(userId, row) {
     db.prepare(`
       INSERT INTO user_settings (
         user_id, business_name, business_email, business_phone, business_website,
+        business_logo_data_url,
         company_type, brand_color, email_signature,
         notify_email, notify_payment, notify_contract, notify_calendar,
         tax_home_state, tax_ytd_expenses,
         tax_filing_status, tax_entity_type, tax_sales_tax_rate,
         stripe_fee_percent, default_deposit_amount, currency,
         gmail_sender_address, gmail_app_password_enc
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `).run(
       userId,
       row.business_name || '',
       row.business_email || '',
       row.business_phone || '',
       row.business_website || '',
+      row.business_logo_data_url || null,
       ctype,
       brand,
       row.email_signature || '',
@@ -197,6 +217,7 @@ function persistUserRow(userId, row) {
     db.prepare(`
       UPDATE user_settings SET
         business_name = ?, business_email = ?, business_phone = ?, business_website = ?,
+        business_logo_data_url = ?,
         company_type = ?, brand_color = ?, email_signature = ?,
         notify_email = ?, notify_payment = ?, notify_contract = ?, notify_calendar = ?,
         tax_home_state = ?, tax_ytd_expenses = ?,
@@ -209,6 +230,7 @@ function persistUserRow(userId, row) {
       row.business_email || '',
       row.business_phone || '',
       row.business_website || '',
+      row.business_logo_data_url || null,
       ctype,
       brand,
       row.email_signature || '',
@@ -237,6 +259,7 @@ function serializeUser(row) {
     business_email: row.business_email || '',
     business_phone: row.business_phone || '',
     business_website: row.business_website || '',
+    business_logo_data_url: row.business_logo_data_url || '',
     company_type: row.company_type || 'Photography',
     brand_color: normalizeBrandColor(row.brand_color || '#a21caf'),
     email_signature: row.email_signature || '',
@@ -326,6 +349,18 @@ router.put('/', auth, (req, res) => {
 
     const hasUserKey = Object.keys(body).some((k) => USER_KEYS.has(k));
     if (hasUserKey) {
+      if (Object.prototype.hasOwnProperty.call(body, 'business_logo_data_url')) {
+        const v = body.business_logo_data_url;
+        if (v != null && v !== '') {
+          const s = String(v).trim();
+          if (s.length > MAX_BUSINESS_LOGO_CHARS) {
+            return res.status(400).json({ error: 'Logo image is too large (max ~450KB encoded)' });
+          }
+          if (!/^data:image\/(png|jpeg|jpg|gif|webp);base64,/i.test(s)) {
+            return res.status(400).json({ error: 'Logo must be a PNG, JPEG, GIF, or WebP image' });
+          }
+        }
+      }
       const cur = getUserRow(req.userId);
       const base = serializeUser(cur);
       const merged = mergeUserRow(base, body);

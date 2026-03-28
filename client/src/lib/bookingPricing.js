@@ -21,6 +21,23 @@ export function computePackageBreakdown(packagePrice) {
   };
 }
 
+/** Mirrors server retainer pricing for New Booking preview. */
+export function computeRetainerBreakdown(monthlyPrice, firstMonthDueNow) {
+  const monthly = roundMoney(monthlyPrice);
+  if (firstMonthDueNow) {
+    return {
+      packagePrice: monthly,
+      depositAmount: monthly,
+      remainingAmount: 0,
+    };
+  }
+  return {
+    packagePrice: monthly,
+    depositAmount: 0,
+    remainingAmount: monthly,
+  };
+}
+
 export function withCardFee(amount) {
   return roundMoney(Math.max(0, Number(amount) || 0) * (1 + CARD_MARKUP));
 }

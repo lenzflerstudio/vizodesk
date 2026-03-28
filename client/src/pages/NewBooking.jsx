@@ -1,7 +1,11 @@
 import { useState, useEffect, useMemo, useRef, useLayoutEffect } from 'react';
-import { useNavigate, useLocation } from 'react-router-dom';
+import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { api } from '../lib/api';
-import { computePackageBreakdown, finalDueDateFromEvent } from '../lib/bookingPricing';
+import {
+  computePackageBreakdown,
+  computeRetainerBreakdown,
+  finalDueDateFromEvent,
+} from '../lib/bookingPricing';
 import { ArrowLeft, Copy } from 'lucide-react';
 import toast from 'react-hot-toast';
 import ClientBookingFields from '../components/ClientBookingFields';
@@ -17,14 +21,25 @@ import { useAuth } from '../contexts/AuthContext';
 import { clientBookingPortalUrl } from '../lib/portalLinks';
 import { DEFAULT_BOOKING_TERMS } from '../data/defaultBookingTerms';
 
+const BILLING_ONE_TIME = 'One-Time (Single Cycle)';
+const SHOOT_ONE_TIME = 'One-Time';
+
+/** Core production type; social is a separate add-on below. */
+const RETAINER_SERVICE_OPTIONS = ['Photography', 'Video', 'Photo + Video'];
+const RETAINER_BILLING_OPTIONS = ['Monthly (Recurring)', BILLING_ONE_TIME];
+const RETAINER_SHOOT_OPTIONS = ['One-Time', '1x per month', '2x per month', 'Weekly'];
+
 export default function NewBooking() {
   const navigate = useNavigate();
   const location = useLocation();
   const { clientPortalBaseUrl } = useAuth();
   const [clients, setClients] = useState([]);
   const [packages, setPackages] = useState([]);
+  const [termsTemplates, setTermsTemplates] = useState([]);
+  const [selectedTermsTemplateId, setSelectedTermsTemplateId] = useState('');
   const [loading, setLoading] = useState(false);
   const [createdBooking, setCreatedBooking] = useState(null);
+  const [isRetainerMode, setIsRetainerMode] = useState(false);
 
   const DEFAULT_FORM = {
     client_id: '',
@@ -40,6 +55,12 @@ export default function NewBooking() {
     venue_not_applicable: false,
     package_price: '',
     terms_and_conditions: DEFAULT_BOOKING_TERMS,
+    retainer_service_type: '',
+    retainer_billing_cycle: '',
+    retainer_shoot_frequency: '',
+    retainer_monthly_deliverables: '',
+    retainer_first_month_due_now: false,
+    retainer_social_media_management: false,
   };
 
   const [form, setForm] = useState(DEFAULT_FORM);
@@ -48,6 +69,7 @@ export default function NewBooking() {
 
   const resetForm = () => {
     setForm({ ...DEFAULT_FORM });
+    setSelectedTermsTemplateId('');
   };
 
   useEffect(() => {
@@ -57,6 +79,10 @@ export default function NewBooking() {
         setPackages(pk);
       })
       .catch(() => {});
+    api
+      .getBookingTermsTemplates()
+      .then(setTermsTemplates)
+      .catch(() => setTermsTemplates([]));
   }, []);
 
   // Native confirm() (e.g. old delete flow) can leave Electron/browser without keyboard focus; restore on enter
@@ -68,6 +94,42 @@ export default function NewBooking() {
   }, [location.key]);
 
   const handle = (e) => setForm((f) => ({ ...f, [e.target.name]: e.target.value }));
+
+  const handleTermsAndConditionsChange = (e) => {
+    setSelectedTermsTemplateId('');
+    setForm((f) => ({ ...f, terms_and_conditions: e.target.value }));
+  };
+
+  const handleTermsTemplateSelect = (e) => {
+    const v = e.target.value;
+    if (!v) {
+      setSelectedTermsTemplateId('');
+      return;
+    }
+    const t = termsTemplates.find((x) => String(x.id) === v);
+    if (t) {
+      setForm((f) => ({ ...f, terms_and_conditions: t.content }));
+      setSelectedTermsTemplateId(v);
+    }
+  };
+
+  const handleRetainerModeToggle = () => {
+    setIsRetainerMode((prev) => {
+      const next = !prev;
+      if (prev && !next) {
+        setForm((f) => ({
+          ...f,
+          retainer_service_type: '',
+          retainer_billing_cycle: '',
+          retainer_shoot_frequency: '',
+          retainer_monthly_deliverables: '',
+          retainer_first_month_due_now: false,
+          retainer_social_media_management: false,
+        }));
+      }
+      return next;
+    });
+  };
 
   const handlePackageNameChange = (e) => {
     setForm((f) => ({
@@ -132,14 +194,26 @@ export default function NewBooking() {
     const raw = stripPackagePriceDecorations(form.package_price);
     const parsed = raw === '' || raw === '.' ? 0 : Number.parseFloat(raw);
     const amount = Number.isFinite(parsed) ? parsed : 0;
+    const finalDueDate = finalDueDateFromEvent(form.event_date);
+    if (isRetainerMode) {
+      const b = computeRetainerBreakdown(amount, form.retainer_first_month_due_now);
+      return { ...b, finalDueDate };
+    }
     const { packagePrice, depositAmount, remainingAmount } = computePackageBreakdown(amount);
     return {
       packagePrice,
       depositAmount,
       remainingAmount,
-      finalDueDate: finalDueDateFromEvent(form.event_date),
+      finalDueDate,
     };
-  }, [form.package_price, form.event_date]);
+  }, [form.package_price, form.event_date, isRetainerMode, form.retainer_first_month_due_now]);
+
+  useEffect(() => {
+    if (!isRetainerMode) return;
+    if (form.retainer_billing_cycle === BILLING_ONE_TIME && form.retainer_shoot_frequency !== SHOOT_ONE_TIME) {
+      setForm((f) => ({ ...f, retainer_shoot_frequency: SHOOT_ONE_TIME }));
+    }
+  }, [isRetainerMode, form.retainer_billing_cycle, form.retainer_shoot_frequency]);
 
   const submit = async (e) => {
     e.preventDefault();
@@ -149,8 +223,19 @@ export default function NewBooking() {
     if (!String(form.event_type || '').trim()) {
       return toast.error('Enter an event type');
     }
+    if (isRetainerMode) {
+      if (!String(form.retainer_service_type || '').trim()) {
+        return toast.error('Select a service type');
+      }
+      if (!String(form.retainer_billing_cycle || '').trim()) {
+        return toast.error('Select a billing cycle');
+      }
+      if (form.retainer_billing_cycle !== BILLING_ONE_TIME && !String(form.retainer_shoot_frequency || '').trim()) {
+        return toast.error('Select shoot frequency');
+      }
+    }
     if (!pricing.packagePrice || pricing.packagePrice <= 0) {
-      return toast.error('Enter a valid package price');
+      return toast.error(isRetainerMode ? 'Enter a valid monthly price' : 'Enter a valid package price');
     }
     setLoading(true);
     try {
@@ -160,8 +245,21 @@ export default function NewBooking() {
         direct_price: String(pricing.packagePrice),
         client_id: form.client_id || null,
         package_template_id: form.package_template_id != null ? form.package_template_id : null,
+        retainer_mode: isRetainerMode,
       };
       delete payload.package_price;
+      if (!isRetainerMode) {
+        delete payload.retainer_service_type;
+        delete payload.retainer_billing_cycle;
+        delete payload.retainer_shoot_frequency;
+        delete payload.retainer_monthly_deliverables;
+        delete payload.retainer_first_month_due_now;
+        delete payload.retainer_social_media_management;
+      } else {
+        const md = String(form.retainer_monthly_deliverables || '').trim();
+        payload.retainer_monthly_deliverables = md || null;
+        payload.retainer_social_media_management = !!form.retainer_social_media_management;
+      }
       if (!String(payload.event_time_range || '').trim()) {
         payload.event_time_range = null;
       }
@@ -197,6 +295,14 @@ export default function NewBooking() {
     : null;
 
   if (createdBooking) {
+    const retainerSuccess = String(createdBooking.notes || '').includes('--- Retainer engagement ---');
+    const dueNowLabel = retainerSuccess
+      ? createdBooking.deposit_amount > 0 && createdBooking.remaining_amount <= 0
+        ? 'First month (due now)'
+        : 'Due now'
+      : 'Deposit (30%)';
+    const balanceLabel = retainerSuccess ? 'Balance (monthly)' : 'Balance due';
+
     return (
       <div className="max-w-lg mx-auto space-y-5">
         <div className="card text-center space-y-4">
@@ -209,15 +315,15 @@ export default function NewBooking() {
           </div>
           <div className="bg-surface-overlay border border-surface-border rounded-lg p-3 text-left text-sm space-y-1">
             <div className="flex justify-between">
-              <span className="text-slate-500">Package</span>
+              <span className="text-slate-500">{retainerSuccess ? 'Monthly price' : 'Package'}</span>
               <span className="text-white font-medium">{formatCurrency(createdBooking.direct_price)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Deposit (30%)</span>
+              <span className="text-slate-500">{dueNowLabel}</span>
               <span className="text-white font-medium">{formatCurrency(createdBooking.deposit_amount)}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-slate-500">Balance due</span>
+              <span className="text-slate-500">{balanceLabel}</span>
               <span className="text-white font-medium">{formatCurrency(createdBooking.remaining_amount)}</span>
             </div>
             {createdBooking.final_due_date && (
@@ -280,12 +386,42 @@ export default function NewBooking() {
           />
         </div>
 
-        {/* Event Details */}
+        <div className="card">
+          <div className="flex items-center justify-between gap-4">
+            <div className="min-w-0">
+              <p className="text-sm font-medium text-slate-200">Retainer Mode</p>
+              <p className="text-xs text-slate-500 mt-0.5 leading-snug">
+                Turn on for recurring / retainer-style work: service-oriented labels, schedule fields, and monthly billing
+                instead of the standard deposit and balance breakdown.
+              </p>
+            </div>
+            <button
+              type="button"
+              role="switch"
+              aria-checked={isRetainerMode}
+              aria-label="Retainer Mode"
+              onClick={handleRetainerModeToggle}
+              className={`relative w-11 h-6 rounded-full flex-shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised ${
+                isRetainerMode ? 'bg-brand' : 'bg-slate-600'
+              }`}
+            >
+              <span
+                className={`absolute top-1 left-1 w-4 h-4 rounded-full bg-white shadow transition-transform ${
+                  isRetainerMode ? 'translate-x-5' : 'translate-x-0'
+                }`}
+              />
+            </button>
+          </div>
+        </div>
+
+        {/* Event Details — labels adjust in Retainer Mode */}
         <div className="card space-y-4">
-          <h2 className="text-sm font-semibold text-slate-300 border-b border-surface-border pb-3">Event Details</h2>
+          <h2 className="text-sm font-semibold text-slate-300 border-b border-surface-border pb-3">
+            {isRetainerMode ? 'Service Details' : 'Event Details'}
+          </h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <label className="label">Event Type *</label>
+              <label className="label">Service Type *</label>
               <input
                 name="event_type"
                 type="text"
@@ -298,7 +434,7 @@ export default function NewBooking() {
               />
             </div>
             <div>
-              <label className="label">Event Date *</label>
+              <label className="label">{isRetainerMode ? 'Start Date *' : 'Event Date *'}</label>
               <input name="event_date" type="date" required className="input" value={form.event_date} onChange={handle} />
             </div>
           </div>
@@ -336,7 +472,7 @@ export default function NewBooking() {
           </div>
 
           <div className="space-y-2">
-            <label className="label">Event time</label>
+            <label className="label">{isRetainerMode ? 'Shoot Window' : 'Event time'}</label>
             <input
               name="event_time_range"
               type="text"
@@ -350,7 +486,7 @@ export default function NewBooking() {
           </div>
 
           <div className="space-y-2">
-            <label className="label">Venue address</label>
+            <label className="label">{isRetainerMode ? 'Business Location' : 'Venue address'}</label>
             <input
               name="venue_address"
               type="text"
@@ -380,6 +516,109 @@ export default function NewBooking() {
               When N/A is checked, the booking stores “N/A” for venue (e.g. studio sessions or TBD later).
             </p>
           </div>
+
+          {isRetainerMode && (
+            <div className="space-y-3 pt-2 border-t border-surface-border">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                <div>
+                  <label className="label">Service Type</label>
+                  <select
+                    className="input"
+                    value={form.retainer_service_type}
+                    onChange={(e) => setForm((f) => ({ ...f, retainer_service_type: e.target.value }))}
+                  >
+                    <option value="">Select…</option>
+                    {RETAINER_SERVICE_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                  <p className="text-xs text-slate-600 mt-1">Photo or video production. Add social management separately below.</p>
+                </div>
+                <div>
+                  <label className="label">Billing Cycle</label>
+                  <select
+                    className="input"
+                    value={form.retainer_billing_cycle}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setForm((f) => ({
+                        ...f,
+                        retainer_billing_cycle: v,
+                        retainer_shoot_frequency: v === BILLING_ONE_TIME ? SHOOT_ONE_TIME : f.retainer_shoot_frequency,
+                      }));
+                    }}
+                  >
+                    <option value="">Select…</option>
+                    {RETAINER_BILLING_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2 flex flex-col gap-3 rounded-lg border border-surface-border bg-surface-overlay/40 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="label mb-0">Social Media Management</p>
+                    <p className="text-xs text-slate-600 mt-1">
+                      Include ongoing social strategy / posting in addition to the service type above.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-3 shrink-0">
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={form.retainer_social_media_management}
+                      aria-label="Social media management"
+                      onClick={() =>
+                        setForm((f) => ({ ...f, retainer_social_media_management: !f.retainer_social_media_management }))
+                      }
+                      className={`relative h-6 w-11 rounded-full flex-shrink-0 transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-surface-raised ${
+                        form.retainer_social_media_management ? 'bg-brand' : 'bg-slate-600'
+                      }`}
+                    >
+                      <span
+                        className={`absolute left-1 top-1 h-4 w-4 rounded-full bg-white shadow transition-transform ${
+                          form.retainer_social_media_management ? 'translate-x-5' : 'translate-x-0'
+                        }`}
+                      />
+                    </button>
+                    <span className="text-sm font-medium text-slate-200 w-8">
+                      {form.retainer_social_media_management ? 'Yes' : 'No'}
+                    </span>
+                  </div>
+                </div>
+                <div>
+                  <label className="label">Shoot Frequency</label>
+                  <select
+                    className="input"
+                    value={form.retainer_shoot_frequency}
+                    disabled={form.retainer_billing_cycle === BILLING_ONE_TIME}
+                    onChange={(e) => setForm((f) => ({ ...f, retainer_shoot_frequency: e.target.value }))}
+                  >
+                    <option value="">Select…</option>
+                    {RETAINER_SHOOT_OPTIONS.map((opt) => (
+                      <option key={opt} value={opt}>
+                        {opt}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="sm:col-span-2">
+                  <label className="label">Monthly Deliverables</label>
+                  <input
+                    type="text"
+                    className="input"
+                    value={form.retainer_monthly_deliverables}
+                    onChange={(e) => setForm((f) => ({ ...f, retainer_monthly_deliverables: e.target.value }))}
+                    placeholder="e.g. 200+ edited images, online gallery, 4 social cuts"
+                    autoComplete="off"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Pricing */}
@@ -387,12 +626,16 @@ export default function NewBooking() {
           <div className="border-b border-surface-border pb-3">
             <h2 className="text-sm font-semibold text-slate-300">Pricing</h2>
             <p className="text-xs text-slate-500 mt-1">
-              Deposit and remaining balance are shown at direct (bank) payment amounts.
+              {isRetainerMode
+                ? 'Monthly retainer amount. You can collect the first month immediately or leave the full month as the balance to pay later.'
+                : 'Deposit and remaining balance are shown at direct (bank) payment amounts.'}
             </p>
           </div>
 
           <div>
-            <label className="label">Package price ($) — full service total</label>
+            <label className="label">
+              {isRetainerMode ? 'Monthly price ($) *' : 'Package price ($) — full service total'}
+            </label>
             <div className="relative">
               <span
                 className="pointer-events-none absolute left-3 top-1/2 z-10 -translate-y-1/2 text-slate-400 select-none"
@@ -414,53 +657,97 @@ export default function NewBooking() {
                 onBlur={handlePackagePriceBlur}
               />
             </div>
-            <p className="text-xs text-slate-500 mt-1">Deposit is always 30% of this amount. Remaining balance is the other 70%.</p>
-          </div>
-
-          <div className="rounded-lg border border-surface-border bg-surface-overlay/50 p-4 space-y-4">
-            <div className="flex justify-between items-baseline">
-              <span className="text-slate-400 text-sm">Package price</span>
-              <span className="text-lg font-bold text-white">{formatCurrency(pricing.packagePrice)}</span>
-            </div>
-
-            <div className="border-t border-surface-border pt-3 space-y-2">
-              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Deposit (due now)</p>
-              <div className="rounded-md bg-surface-overlay p-3 border border-surface-border text-sm">
-                <p className="text-xs text-slate-500 mb-0.5 leading-snug">Direct / Zelle (No fee)</p>
-                <p className="text-base font-semibold text-white">{formatCurrency(pricing.depositAmount)}</p>
-              </div>
-            </div>
-
-            <div className="border-t border-surface-border pt-3 space-y-2">
-              <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
-                Remaining balance
-                {pricing.finalDueDate ? (
-                  <span className="normal-case font-normal text-slate-500"> (due {pricing.finalDueDate} — 7 days before event)</span>
-                ) : (
-                  <span className="normal-case font-normal text-slate-500"> (due 7 days before event)</span>
-                )}
+            {!isRetainerMode ? (
+              <p className="text-xs text-slate-500 mt-1">
+                Deposit is always 30% of this amount. Remaining balance is the other 70%.
               </p>
-              <div className="rounded-md bg-surface-overlay p-3 border border-surface-border text-sm">
-                <p className="text-xs text-slate-500 mb-0.5 leading-snug">Direct / Zelle (No fee)</p>
-                <p className="text-base font-semibold text-white">{formatCurrency(pricing.remainingAmount)}</p>
+            ) : null}
+          </div>
+
+          {isRetainerMode ? (
+            <label className="flex items-center gap-2 cursor-pointer select-none text-sm text-slate-300">
+              <input
+                type="checkbox"
+                className="rounded border-surface-border bg-surface text-brand focus:ring-brand/40"
+                checked={form.retainer_first_month_due_now}
+                onChange={(e) => setForm((f) => ({ ...f, retainer_first_month_due_now: e.target.checked }))}
+              />
+              <span>First month due now</span>
+            </label>
+          ) : null}
+
+          {!isRetainerMode ? (
+            <div className="rounded-lg border border-surface-border bg-surface-overlay/50 p-4 space-y-4">
+              <div className="flex justify-between items-baseline">
+                <span className="text-slate-400 text-sm">Package price</span>
+                <span className="text-lg font-bold text-white">{formatCurrency(pricing.packagePrice)}</span>
+              </div>
+
+              <div className="border-t border-surface-border pt-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">Deposit (due now)</p>
+                <div className="rounded-md bg-surface-overlay p-3 border border-surface-border text-sm">
+                  <p className="text-xs text-slate-500 mb-0.5 leading-snug">Direct / Zelle (No fee)</p>
+                  <p className="text-base font-semibold text-white">{formatCurrency(pricing.depositAmount)}</p>
+                </div>
+              </div>
+
+              <div className="border-t border-surface-border pt-3 space-y-2">
+                <p className="text-xs font-semibold text-slate-300 uppercase tracking-wide">
+                  Remaining balance
+                  {pricing.finalDueDate ? (
+                    <span className="normal-case font-normal text-slate-500">
+                      {' '}
+                      (due {pricing.finalDueDate} — 7 days before event)
+                    </span>
+                  ) : (
+                    <span className="normal-case font-normal text-slate-500"> (due 7 days before event)</span>
+                  )}
+                </p>
+                <div className="rounded-md bg-surface-overlay p-3 border border-surface-border text-sm">
+                  <p className="text-xs text-slate-500 mb-0.5 leading-snug">Direct / Zelle (No fee)</p>
+                  <p className="text-base font-semibold text-white">{formatCurrency(pricing.remainingAmount)}</p>
+                </div>
               </div>
             </div>
-          </div>
+          ) : null}
 
           <div className="border-t border-surface-border pt-5 space-y-3">
             <div>
               <h2 className="text-sm font-semibold text-slate-300">Terms &amp; conditions</h2>
               <p className="text-xs text-slate-500 mt-1">
                 This is the agreement: it appears on the client link below pricing, and clients can sign there — no
-                separate contract file needed.
+                separate contract file needed. Load a saved preset for different booking types, then edit if needed.
+                Manage presets on{' '}
+                <Link to="/contracts" className="text-brand-light hover:underline">
+                  Contracts
+                </Link>
+                .
               </p>
             </div>
+            {termsTemplates.length > 0 ? (
+              <div>
+                <label className="label">Terms preset</label>
+                <select
+                  className="input"
+                  value={selectedTermsTemplateId}
+                  onChange={handleTermsTemplateSelect}
+                  aria-label="Load terms from saved preset"
+                >
+                  <option value="">Custom (edit below)</option>
+                  {termsTemplates.map((t) => (
+                    <option key={t.id} value={String(t.id)}>
+                      {t.name}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <textarea
               name="terms_and_conditions"
               className="input min-h-[220px] resize-y font-sans leading-relaxed"
               rows={14}
               value={form.terms_and_conditions}
-              onChange={handle}
+              onChange={handleTermsAndConditionsChange}
               spellCheck
             />
           </div>

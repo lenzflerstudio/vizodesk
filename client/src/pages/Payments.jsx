@@ -1,5 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
-import html2canvas from 'html2canvas';
+import { useState, useEffect, useCallback } from 'react';
 import { api } from '../lib/api';
 import {
   CreditCard,
@@ -24,7 +23,10 @@ import { useAuth } from '../contexts/AuthContext';
 import { clientBookingPortalUrl, clientInvoicePortalUrl } from '../lib/portalLinks';
 import { buildInvoicePrintHtml } from '../lib/invoicePrintDocument';
 import SendClientDocumentsModal from '../components/SendClientDocumentsModal';
-import BookingPortalSnapshot from '../components/BookingPortalSnapshot.jsx';
+import {
+  downloadBookingPaymentReceiptPdf as saveBookingReceiptPdf,
+  getReceiptSummaryLines,
+} from '../lib/bookingPaymentReceiptPdf';
 
 const INVOICE_PAY_METHODS = [
   'Bank payment',
@@ -210,7 +212,7 @@ function RecordInvoicePaymentModal({ invoiceId, onClose, onSaved }) {
 }
 
 export default function Payments() {
-  const { clientPortalBaseUrl } = useAuth();
+  const { clientPortalBaseUrl, user } = useAuth();
   const [payments, setPayments] = useState([]);
   const [invoices, setInvoices] = useState([]);
   const [bookings, setBookings] = useState([]);
@@ -226,7 +228,6 @@ export default function Payments() {
   const [portalSnapshotOpen, setPortalSnapshotOpen] = useState(false);
   const [portalSnapshotBooking, setPortalSnapshotBooking] = useState(null);
   const [portalSnapshotLoading, setPortalSnapshotLoading] = useState(false);
-  const portalSnapshotRef = useRef(null);
   /** In-app confirm (avoid window.confirm — native dialogs break keyboard focus in Electron after navigate). */
   const [paymentDeleteTarget, setPaymentDeleteTarget] = useState(null);
   const [invoiceDeleteTarget, setInvoiceDeleteTarget] = useState(null);
@@ -382,32 +383,17 @@ export default function Payments() {
     }
   };
 
-  const downloadPortalSnapshotPng = async () => {
-    const el = portalSnapshotRef.current;
-    if (!el) {
-      toast.error('Nothing to capture');
+  const downloadBookingReceiptPdf = async () => {
+    if (!portalSnapshotBooking) {
+      toast.error('Nothing to export');
       return;
     }
-    const t = toast.loading('Creating image…');
     try {
-      await new Promise((r) => requestAnimationFrame(() => r()));
-      await new Promise((r) => setTimeout(r, 450));
-      const canvas = await html2canvas(el, {
-        scale: 2,
-        backgroundColor: '#050508',
-        logging: false,
-        useCORS: true,
-      });
-      const raw = (portalSnapshotBooking?.client_name || 'booking').replace(/[<>:"/\\|?*]/g, '').trim() || 'booking';
-      const safe = raw.slice(0, 48).replace(/\s+/g, '-');
-      const a = document.createElement('a');
-      a.href = canvas.toDataURL('image/png');
-      a.download = `client-portal-${safe}-${new Date().toISOString().slice(0, 10)}.png`;
-      a.click();
-      toast.success('PNG download started', { id: t });
+      await saveBookingReceiptPdf(portalSnapshotBooking, settings || {}, user);
+      toast.success('Receipt PDF download started');
     } catch (e) {
       console.error(e);
-      toast.error('Could not create image — try again or use Print.', { id: t });
+      toast.error('Could not create receipt PDF.');
     }
   };
 
@@ -726,8 +712,8 @@ export default function Payments() {
                               <button
                                 type="button"
                                 className={`${ACTION_ICON} text-fuchsia-300/90 hover:text-fuchsia-200`}
-                                title="View client portal summary (download as PNG)"
-                                aria-label="View booking portal snapshot"
+                                title="View payment receipt (download PDF)"
+                                aria-label="View booking payment receipt"
                                 onClick={() => openPaymentPortalSnapshot(p)}
                               >
                                 <Eye size={16} strokeWidth={1.75} />
@@ -890,10 +876,11 @@ export default function Payments() {
             <div className="flex items-start justify-between gap-3 p-4 border-b border-surface-border shrink-0">
               <div>
                 <h2 id="portal-snapshot-title" className="text-lg font-semibold text-white">
-                  Client portal snapshot
+                  Payment receipt
                 </h2>
                 <p className="text-xs text-slate-500 mt-1">
-                  Same summary your client sees. Download a PNG for your records.
+                  Plain receipt (like an invoice): retainer and paid-in-full dates, payment lines, and amount due — not a
+                  full portal screenshot.
                 </p>
               </div>
               <button
@@ -908,21 +895,32 @@ export default function Payments() {
                 <X size={18} />
               </button>
             </div>
-            <div className="overflow-y-auto flex-1 min-h-0 p-4 flex justify-center bg-[#0a0a0f]">
+            <div className="overflow-y-auto flex-1 min-h-0 p-4 bg-[#0a0a0f]">
               {portalSnapshotLoading ? (
                 <div className="flex flex-col items-center justify-center py-16 gap-3">
                   <Loader2 className="w-8 h-8 text-brand animate-spin" />
                   <p className="text-sm text-slate-500">Loading booking…</p>
                 </div>
               ) : portalSnapshotBooking ? (
-                <BookingPortalSnapshot ref={portalSnapshotRef} booking={portalSnapshotBooking} />
+                <div className="rounded-lg border border-surface-border bg-surface-overlay/50 p-4 text-sm text-slate-300 space-y-3">
+                  <p className="text-slate-400 text-xs uppercase tracking-wide">Preview — PDF will include</p>
+                  <ul className="list-disc list-inside space-y-2 text-slate-200">
+                    {getReceiptSummaryLines(portalSnapshotBooking).map((line, i) => (
+                      <li key={i}>{line}</li>
+                    ))}
+                  </ul>
+                  <p className="text-xs text-slate-500 pt-2 border-t border-surface-border">
+                    {portalSnapshotBooking.client_name} · {portalSnapshotBooking.event_type || 'Event'} ·{' '}
+                    {portalSnapshotBooking.event_date || '—'}
+                  </p>
+                </div>
               ) : null}
             </div>
             {portalSnapshotBooking && !portalSnapshotLoading ? (
               <div className="p-4 border-t border-surface-border flex flex-wrap gap-2 justify-end shrink-0">
-                <button type="button" className="btn-secondary text-sm" onClick={downloadPortalSnapshotPng}>
+                <button type="button" className="btn-secondary text-sm" onClick={downloadBookingReceiptPdf}>
                   <Download size={16} className="inline mr-1.5 -mt-0.5" />
-                  Download PNG
+                  Download receipt PDF
                 </button>
               </div>
             ) : null}

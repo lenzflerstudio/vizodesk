@@ -6,11 +6,53 @@ const contractUploadService = require('../services/contractUploadService');
 const { getPaymentPortalRow, serializePaymentPortal } = require('./paymentPortalHelper');
 const { serializePackageDetailsPublic } = require('../routes/packages');
 
+const RETAINER_NOTES_MARKER = '--- Retainer engagement ---';
+
+/** Parse structured retainer lines from booking notes for the client portal. */
+function parseRetainerEngagementFromNotes(notes) {
+  const s = String(notes || '');
+  const idx = s.indexOf(RETAINER_NOTES_MARKER);
+  if (idx < 0) return null;
+  let chunk = s.slice(idx + RETAINER_NOTES_MARKER.length).replace(/^\s*\n?/, '');
+  const paraBreak = chunk.indexOf('\n\n');
+  if (paraBreak >= 0) chunk = chunk.slice(0, paraBreak);
+  const lines = chunk.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
+  const items = [];
+  for (const line of lines) {
+    if (line.startsWith('---')) break;
+    const colon = line.indexOf(':');
+    if (colon < 1) continue;
+    const label = line.slice(0, colon).trim();
+    const value = line.slice(colon + 1).trim();
+    if (label && value) items.push({ label, value });
+  }
+  return items.length ? items : null;
+}
+
 function packageDetailsForBooking(booking) {
-  if (!booking?.package_template_id) return null;
+  const userId = booking?.user_id;
+  if (userId == null) return null;
+
+  if (booking?.package_template_id) {
+    const pt = db
+      .prepare('SELECT * FROM package_templates WHERE id = ? AND user_id = ?')
+      .get(booking.package_template_id, userId);
+    return serializePackageDetailsPublic(pt);
+  }
+
+  const pkgName = String(booking.package || '').trim();
+  if (!pkgName) return null;
+
   const pt = db
-    .prepare('SELECT * FROM package_templates WHERE id = ? AND user_id = ?')
-    .get(booking.package_template_id, booking.user_id);
+    .prepare(
+      `SELECT * FROM package_templates WHERE user_id = ?
+       AND (
+         LOWER(TRIM(COALESCE(label, ''))) = LOWER(?)
+         OR LOWER(TRIM(COALESCE(display_title, ''))) = LOWER(?)
+       )
+       ORDER BY id DESC LIMIT 1`
+    )
+    .get(userId, pkgName, pkgName);
   return serializePackageDetailsPublic(pt);
 }
 
@@ -69,6 +111,7 @@ function serializePublicBookingPayload(booking) {
   return {
     ...enrichBookingRow(safeBooking),
     package_details,
+    retainer_engagement: parseRetainerEngagementFromNotes(safeBooking.notes),
     payment_portal,
     contract: contractOut,
     payments,
@@ -92,4 +135,5 @@ module.exports = {
   serializePublicBookingPayload,
   ensureDefaultContract,
   packageDetailsForBooking,
+  parseRetainerEngagementFromNotes,
 };

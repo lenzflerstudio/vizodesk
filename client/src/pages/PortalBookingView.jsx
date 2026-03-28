@@ -3,20 +3,22 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { portalPublicApi as api } from '../lib/portalPublicApi';
 import { formatCurrency } from '../lib/formatCurrency';
-import { Calendar, MapPin, User, Sparkles, Check, FileText, Wallet, Clapperboard } from 'lucide-react';
+import { Calendar, MapPin, User, Sparkles, Check, FileText, Wallet, Clapperboard, ListChecks } from 'lucide-react';
 import DepositPayPicker from '../components/portal/DepositPayPicker.jsx';
 import ContractSignatureSection from '../components/portal/ContractSignatureSection.jsx';
 import { effectivePackagePaid } from '../lib/effectivePaid';
 
 function PortalShell({ children }) {
   return (
-    <div className="min-h-screen relative text-zinc-100">
-      <div className="pointer-events-none fixed inset-0 overflow-hidden" aria-hidden>
+    <div className="relative flex h-[100dvh] min-h-0 flex-col overflow-hidden bg-[#050508] text-zinc-100">
+      <div className="pointer-events-none absolute inset-0 z-0 overflow-hidden" aria-hidden>
         <div className="absolute -top-[40%] left-1/2 h-[min(90vh,720px)] w-[min(140vw,900px)] -translate-x-1/2 rounded-full bg-[radial-gradient(ellipse_at_center,rgba(192,38,211,0.12)_0%,transparent_58%)]" />
         <div className="absolute bottom-[-20%] right-[-10%] h-[min(70vh,560px)] w-[min(90vw,640px)] rounded-full bg-[radial-gradient(ellipse_at_center,rgba(59,130,246,0.07)_0%,transparent_55%)]" />
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(5,5,8,0)_0%,#050508_85%)]" />
       </div>
-      <div className="relative z-10 px-4 py-10 sm:px-6 sm:py-14">{children}</div>
+      <div className="relative z-10 min-h-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-y-contain px-4 py-10 sm:px-6 sm:py-14">
+        {children}
+      </div>
     </div>
   );
 }
@@ -217,6 +219,9 @@ export default function PortalBookingView({ token }) {
 
   const taglineText = pkg?.tagline?.trim() || null;
 
+  const retainerPlan = Array.isArray(booking.retainer_engagement) ? booking.retainer_engagement : null;
+  const isRetainerBooking = Boolean(retainerPlan?.length);
+
   return (
     <PortalShell>
       <div className="mx-auto max-w-lg space-y-7 sm:space-y-8">
@@ -233,16 +238,38 @@ export default function PortalBookingView({ token }) {
         <Section eyebrow="Event" title="Details" icon={Calendar}>
           <div className="divide-y divide-white/[0.06]">
             <DetailRow icon={User} label="Client" value={booking.client_name} />
-            <DetailRow icon={Clapperboard} label="Event" value={booking.event_type} />
-            <DetailRow icon={Calendar} label="Date" value={booking.event_date} />
+            <DetailRow
+              icon={Clapperboard}
+              label={retainerPlan ? 'Service title' : 'Event'}
+              value={booking.event_type}
+            />
+            <DetailRow icon={Calendar} label={retainerPlan ? 'Start date' : 'Date'} value={booking.event_date} />
             {booking.event_time_range ? (
-              <DetailRow icon={Calendar} label="Event time" value={booking.event_time_range} />
+              <DetailRow
+                icon={Calendar}
+                label={retainerPlan ? 'Shoot window' : 'Event time'}
+                value={booking.event_time_range}
+              />
             ) : null}
             {booking.venue_address ? (
-              <DetailRow icon={MapPin} label="Venue" value={booking.venue_address} />
+              <DetailRow
+                icon={MapPin}
+                label={retainerPlan ? 'Location' : 'Venue'}
+                value={booking.venue_address}
+              />
             ) : null}
           </div>
         </Section>
+
+        {retainerPlan?.length ? (
+          <Section eyebrow="Your plan" title="What you're getting" icon={ListChecks}>
+            <div className="divide-y divide-white/[0.06]">
+              {retainerPlan.map((row, i) => (
+                <DetailRow key={`${i}-${row.label}`} label={row.label} value={row.value} />
+              ))}
+            </div>
+          </Section>
+        ) : null}
 
         {showPackageBlock ? (
           <Section eyebrow="Your selection" title="Package" icon={Sparkles}>
@@ -261,7 +288,12 @@ export default function PortalBookingView({ token }) {
                     <p className="text-sm font-medium text-brand-light/90">{pkg.display_title}</p>
                   ) : null}
                   {taglineText ? (
-                    <p className="text-sm leading-relaxed text-zinc-400">{taglineText}</p>
+                    <div className="pt-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-zinc-500">
+                        Description
+                      </p>
+                      <p className="mt-2 text-sm leading-relaxed text-zinc-300">{taglineText}</p>
+                    </div>
                   ) : null}
                 </div>
               </div>
@@ -321,33 +353,37 @@ export default function PortalBookingView({ token }) {
               </div>
             </div>
 
-            <div>
-              <p className="text-xs font-semibold text-zinc-400">
-                Remaining balance
-                {!fullyPaid && booking.final_due_date ? (
-                  <span className="font-normal text-zinc-500">
-                    {' '}
-                    · due {booking.final_due_date} (7 days before event)
-                  </span>
-                ) : !fullyPaid ? (
-                  <span className="font-normal text-zinc-500"> · due 7 days before event</span>
-                ) : null}
-              </p>
-              <div className="mt-3">
-                {fullyPaid ? (
-                  <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-4 text-center">
-                    <p className="text-sm font-semibold text-emerald-400">Paid in full</p>
-                    <p className="mt-1 text-xs text-zinc-500">No balance due on this booking.</p>
-                  </div>
-                ) : (
-                  <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
-                )}
+            {!isRetainerBooking ? (
+              <div>
+                <p className="text-xs font-semibold text-zinc-400">
+                  Remaining balance
+                  {!fullyPaid && booking.final_due_date ? (
+                    <span className="font-normal text-zinc-500">
+                      {' '}
+                      · due {booking.final_due_date} (7 days before event)
+                    </span>
+                  ) : !fullyPaid ? (
+                    <span className="font-normal text-zinc-500"> · due 7 days before event</span>
+                  ) : null}
+                </p>
+                <div className="mt-3">
+                  {fullyPaid ? (
+                    <div className="rounded-2xl border border-emerald-500/25 bg-emerald-500/[0.07] px-4 py-4 text-center">
+                      <p className="text-sm font-semibold text-emerald-400">Paid in full</p>
+                      <p className="mt-1 text-xs text-zinc-500">No balance due on this booking.</p>
+                    </div>
+                  ) : (
+                    <PriceTile label="Direct / Zelle (no fee)" amount={formatCurrency(remainingDirectDisplay)} />
+                  )}
+                </div>
               </div>
-            </div>
+            ) : null}
 
             <p className="text-xs leading-relaxed text-zinc-600">
               {fullyPaid ? (
                 <>Your package is paid in full.</>
+              ) : isRetainerBooking ? (
+                <>Bank transfers have no fee. Package total and retainer due now are shown above.</>
               ) : (
                 <>Bank transfers have no fee. Package total is shown above.</>
               )}
