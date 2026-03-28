@@ -151,7 +151,7 @@ export default function PortalBookingView({ token }) {
     setLoadError(false);
     setBooking(null);
     api
-      .getBookingByToken(token)
+      .getPublicBooking(token)
       .then(setBooking)
       .catch(() => setLoadError(true));
   }, [token]);
@@ -161,7 +161,7 @@ export default function PortalBookingView({ token }) {
     const q = new URLSearchParams(location.search);
     if (q.get('recorded') !== '1') return;
     api
-      .getBookingByToken(token)
+      .getPublicBooking(token)
       .then(setBooking)
       .catch(() => {});
     toast.success('Payment recorded. Thank you!');
@@ -385,7 +385,7 @@ export default function PortalBookingView({ token }) {
           bookingToken={token}
           contract={booking.contract}
           onSigned={() =>
-            api.getBookingByToken(token).then(setBooking).catch(() => toast.error('Could not refresh booking'))
+            api.getPublicBooking(token).then(setBooking).catch(() => toast.error('Could not refresh booking'))
           }
         />
 

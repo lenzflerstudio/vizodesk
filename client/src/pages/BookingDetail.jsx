@@ -11,7 +11,7 @@ const MANUAL_PAY_METHODS = ['Zelle', 'Cash App', 'Venmo', 'Bank transfer', 'Cash
 
 export default function BookingDetail() {
   const { clientPortalBaseUrl } = useAuth();
-  const { id } = useParams();
+  const { token } = useParams();
   const navigate = useNavigate();
   const [booking, setBooking] = useState(null);
   const [loading, setLoading] = useState(true);

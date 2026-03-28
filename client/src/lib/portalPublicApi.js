@@ -19,7 +19,7 @@ async function request(method, path, body = null) {
 }
 
 export const portalPublicApi = {
-  getBookingByToken: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null),
+  getPublicBooking: (token) => request('GET', `/public/booking/${encodeURIComponent(token)}`, null),
   createSquareRemainingSession: (booking_token) =>
     request('POST', '/payments/square/remaining', { booking_token }),
   createSquareDepositSession: (booking_token) =>

@@ -98,9 +98,15 @@ export const api = {
   // Bookings
   getBookings: () => request('GET', '/bookings'),
   getBooking: (id) => request('GET', `/bookings/${id}`),
-  /** Public client view — no auth, does not trigger login redirect on 401 */
-  getBookingPublic: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
-  getBookingByToken: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
+  /** Public client portal — `public_token`, no auth, no login redirect on 401 */
+  getPublicBooking: (token) =>
+    request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
+  /** @deprecated use getPublicBooking */
+  getBookingPublic: (token) =>
+    request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
+  /** @deprecated use getPublicBooking */
+  getBookingByToken: (token) =>
+    request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
   getStats: () => request('GET', '/bookings/stats'),
   createBooking: (data) => request('POST', '/bookings', data),
   updateBooking: (id, data) => request('PUT', `/bookings/${id}`, data),

@@ -15,8 +15,12 @@ async function request(method, path, body = null, isPublic = false) {
 }
 
 export const api = {
-  /** Public JSON — same payload as GET /api/bookings/public/:token */
-  getBookingByToken: (token) => request('GET', `/booking/${encodeURIComponent(token)}`, null, true),
+  /** Public JSON by `public_token` — GET /api/public/booking/:token */
+  getPublicBooking: (token) =>
+    request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
+  /** @deprecated use getPublicBooking */
+  getBookingByToken: (token) =>
+    request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
   getInvoiceByToken: (token) => request('GET', `/invoices/public/${token}`, null, true),
   createSquareRemainingSession: (booking_token) =>
     request('POST', '/payments/square/remaining', { booking_token }, true),

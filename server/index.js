@@ -37,14 +37,19 @@ app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/email', require('./routes/email'));
 
-/** Public booking JSON by token (no auth) — alias for client links /portal parity */
-app.get('/api/booking/:token', (req, res) => {
+function sendPublicBookingByToken(req, res) {
   const token = String(req.params.token || '').trim();
   if (!token) return res.status(400).json({ error: 'Missing token' });
   const json = buildPublicBookingJson(token);
   if (!json) return res.status(404).json({ error: 'Booking not found' });
   res.json(json);
-});
+}
+
+/** Public booking JSON by `public_token` (no auth) */
+app.get('/api/public/booking/:token', sendPublicBookingByToken);
+
+/** Legacy path — same payload */
+app.get('/api/booking/:token', sendPublicBookingByToken);
 
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
