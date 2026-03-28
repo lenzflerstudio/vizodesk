@@ -8,52 +8,15 @@ const { applyPaymentTax } = require('../lib/paymentTax');
 const { getSquareClientForUser, getSquareWebhookVerification } = require('../lib/squareClient');
 const { getResolvedClientPortalBaseUrl } = require('../lib/clientPortalUrl');
 const { findBookingByPublicToken } = require('../lib/publicBookingView');
-
-/** Client-visible card markup (passed through to card total). */
-const CARD_MARKUP = 0.03;
-
-/** Net amount applied to the package (card gross ÷ 1.03). */
-function cardPaymentNet(gross) {
-  return Math.round((parseFloat(gross) / (1 + CARD_MARKUP)) * 100) / 100;
-}
-
-function isCardProcessorMethod(m) {
-  return m === 'Square' || m === 'Stripe';
-}
-
-/** Sum of completed payments toward package total (direct $ = face value; card = net of fee). */
-function effectivePackagePaid(bookingId) {
-  const rows = db.prepare(
-    "SELECT amount, method FROM payments WHERE booking_id = ? AND status = 'Completed'"
-  ).all(bookingId);
-  let sum = 0;
-  for (const p of rows) {
-    const a = parseFloat(p.amount) || 0;
-    sum += isCardProcessorMethod(p.method) ? cardPaymentNet(a) : a;
-  }
-  return Math.round(sum * 100) / 100;
-}
+const {
+  CARD_MARKUP,
+  effectivePackagePaid,
+  updateBookingPaymentStatus,
+} = require('../lib/bookingPaymentStatus');
+const { notifyLocalAppFireAndForget } = require('../lib/syncCallbackToLocal');
 
 function cardDepositFromBooking(booking) {
   return parseFloat(booking.square_deposit ?? booking.stripe_deposit) || 0;
-}
-
-function updateBookingPaymentStatus(booking) {
-  const packageTotal = parseFloat(booking.direct_price) || 0;
-  const deposit = parseFloat(booking.deposit_amount) || 0;
-  const paid = effectivePackagePaid(booking.id);
-
-  if (packageTotal > 0 && paid + 0.005 >= packageTotal) {
-    db.prepare(`UPDATE bookings SET payment_status = 'Paid', status = 'Paid' WHERE id = ?`).run(booking.id);
-  } else if (deposit > 0 && paid + 0.005 >= deposit) {
-    db.prepare(`UPDATE bookings SET payment_status = 'Deposit Paid', status = 'Deposit Paid' WHERE id = ?`).run(booking.id);
-  } else {
-    db.prepare(
-      `UPDATE bookings SET payment_status = 'Unpaid',
-        status = CASE WHEN status IN ('Paid', 'Deposit Paid') THEN 'Pending' ELSE status END
-       WHERE id = ?`
-    ).run(booking.id);
-  }
 }
 
 async function createSquarePaymentLink({ booking, userId, chargeDollars, title, bookingTokenEncoded }) {
@@ -213,8 +176,19 @@ router.post('/portal/confirm-bank', (req, res) => {
       )
       .get(booking.id, `${notePrefix}%`);
     if (existing) {
+      const payRow = db.prepare('SELECT * FROM payments WHERE id = ?').get(existing.id);
       const fresh = db.prepare('SELECT * FROM bookings WHERE id = ?').get(booking.id);
       updateBookingPaymentStatus(fresh);
+      if (payRow) {
+        notifyLocalAppFireAndForget({
+          event: 'portal_payment',
+          public_token: tok,
+          amount: payRow.amount,
+          method: payRow.method,
+          notes: payRow.notes,
+          phase: ph,
+        });
+      }
       return res.json({
         ok: true,
         alreadyRecorded: true,
@@ -233,6 +207,21 @@ router.post('/portal/confirm-bank', (req, res) => {
     if (amount <= 0.005) {
       const fresh = db.prepare('SELECT * FROM bookings WHERE id = ?').get(booking.id);
       updateBookingPaymentStatus(fresh);
+      const payRow = db
+        .prepare(
+          `SELECT * FROM payments WHERE booking_id = ? AND status = 'Completed' AND notes LIKE ? ORDER BY id DESC LIMIT 1`
+        )
+        .get(booking.id, `${notePrefix}%`);
+      if (payRow) {
+        notifyLocalAppFireAndForget({
+          event: 'portal_payment',
+          public_token: tok,
+          amount: payRow.amount,
+          method: payRow.method,
+          notes: payRow.notes,
+          phase: ph,
+        });
+      }
       return res.json({
         ok: true,
         alreadyRecorded: true,
@@ -259,6 +248,15 @@ router.post('/portal/confirm-bank', (req, res) => {
 
     const fresh = db.prepare('SELECT * FROM bookings WHERE id = ?').get(booking.id);
     updateBookingPaymentStatus(fresh);
+
+    notifyLocalAppFireAndForget({
+      event: 'portal_payment',
+      public_token: tok,
+      amount,
+      method: methodLabel,
+      notes,
+      phase: ph,
+    });
 
     const payRow = db.prepare('SELECT * FROM payments WHERE id = ?').get(newId);
     res.status(201).json({
@@ -458,6 +456,17 @@ router.post('/square/webhook', express.raw({ type: 'application/json' }), async 
 
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(pending.booking_id);
     if (booking) updateBookingPaymentStatus(booking);
+
+    const pay = db.prepare('SELECT * FROM payments WHERE id = ?').get(pending.id);
+    if (booking?.public_token && pay) {
+      notifyLocalAppFireAndForget({
+        event: 'square_payment_completed',
+        public_token: booking.public_token,
+        amount: pay.amount,
+        square_order_id: String(orderId),
+        square_payment_id: squarePaymentId || '',
+      });
+    }
 
     return res.json({ received: true });
   } catch (err) {

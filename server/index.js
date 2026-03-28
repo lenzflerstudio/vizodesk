@@ -51,6 +51,7 @@ app.use('/api/contracts', require('./routes/contracts'));
 app.use('/api/payments', require('./routes/payments'));
 app.use('/api/invoices', require('./routes/invoices'));
 app.use('/api/email', require('./routes/email'));
+app.use('/api/sync/callback', require('./routes/syncCallbackReceiver'));
 
 /** Public booking by `public_token` — no auth (see routes/publicBooking.js) */
 app.use('/api/public/booking', publicBookingRouter);

@@ -6,6 +6,7 @@ const auth = require('../middleware/auth');
 const db = require('../db');
 const contractUploadService = require('../services/contractUploadService');
 const { findBookingByPublicToken } = require('../lib/publicBookingView');
+const { notifyLocalAppFireAndForget } = require('../lib/syncCallbackToLocal');
 
 const memoryStorage = multer.memoryStorage();
 const uploadPdf = multer({
@@ -163,6 +164,12 @@ router.put('/:bookingToken/sign', (req, res) => {
 
   db.prepare("UPDATE bookings SET status = 'Signed' WHERE id = ? AND status = 'Pending'").run(booking.id);
 
+  notifyLocalAppFireAndForget({
+    event: 'contract_signed',
+    public_token: booking.public_token,
+    signature_data,
+  });
+
   res.json({ success: true, message: 'Contract signed successfully' });
 });
 
@@ -180,6 +187,11 @@ router.delete('/:bookingToken/signature', (req, res) => {
   `).run(contract.id);
 
   db.prepare("UPDATE bookings SET status = 'Pending' WHERE id = ? AND status = 'Signed'").run(booking.id);
+
+  notifyLocalAppFireAndForget({
+    event: 'contract_signature_cleared',
+    public_token: booking.public_token,
+  });
 
   res.json({ success: true });
 });
