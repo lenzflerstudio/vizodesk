@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import PortalBookingView from './PortalBookingView.jsx';
+import PortalBookingView from '../../client/src/pages/PortalBookingView.jsx';
 
 export default function App() {
   const { token } = useParams();

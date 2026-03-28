@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import PortalBookingView from '../../../portal/src/PortalBookingView.jsx';
+import PortalBookingView from './PortalBookingView.jsx';
 
 /**
  * Client booking link on the admin origin (e.g. https://vizodesk.onrender.com/booking/:token).

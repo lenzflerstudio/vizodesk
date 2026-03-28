@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { api } from './lib/api';
-import { formatCurrency } from './lib/formatCurrency';
+import { portalPublicApi as api } from '../lib/portalPublicApi';
+import { formatCurrency } from '../lib/formatCurrency';
 import { Calendar, MapPin, User, Sparkles, Check, FileText, Wallet, Clapperboard } from 'lucide-react';
-import DepositPayPicker from './components/DepositPayPicker.jsx';
-import ContractSignatureSection from './components/ContractSignatureSection.jsx';
-import { effectivePackagePaid } from './lib/effectivePaid';
+import DepositPayPicker from '../components/portal/DepositPayPicker.jsx';
+import ContractSignatureSection from '../components/portal/ContractSignatureSection.jsx';
+import { effectivePackagePaid } from '../lib/effectivePaid';
 
 function PortalShell({ children }) {
   return (

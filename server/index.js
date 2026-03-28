@@ -52,7 +52,11 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' 
 if (hasClientBuild) {
   app.use(express.static(clientDist));
 
-  app.get('*', (req, res, next) => {
+  // Direct visits to client routes (e.g. /booking/:token) must serve index.html so React Router runs.
+  // Must come after express.static so real files (/assets/*, favicon, etc.) are not replaced.
+  // app.use avoids path-to-regexp issues with app.get('*') on some Express versions.
+  app.use((req, res, next) => {
+    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
     if (req.path.startsWith('/api')) return next();
     res.sendFile(path.join(clientDist, 'index.html'), (err) => {
       if (err) next(err);

@@ -1,7 +1,7 @@
 import { useCallback, useLayoutEffect, useRef, useState } from 'react';
 import { PenLine, Loader2 } from 'lucide-react';
 import toast from 'react-hot-toast';
-import { api } from '../lib/api';
+import { portalPublicApi as api } from '../../lib/portalPublicApi';
 
 function Section({ eyebrow, title, icon: Icon, children }) {
   return (

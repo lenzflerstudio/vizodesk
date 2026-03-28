@@ -2,8 +2,8 @@ import { useId, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { ArrowLeft, Copy } from 'lucide-react';
-import { formatCurrency } from '../lib/formatCurrency';
-import { api } from '../lib/api';
+import { formatCurrency } from '../../lib/formatCurrency';
+import { portalPublicApi as api } from '../../lib/portalPublicApi';
 
 /** Brand-colored tiles with simple marks (not official logos). */
 function IconZelle({ className }) {
