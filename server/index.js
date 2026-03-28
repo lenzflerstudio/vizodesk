@@ -32,9 +32,17 @@ app.use('/api/clients', require('./routes/clients'));
 app.use('/api/packages', require('./routes/packages'));
 const publicBookingsRouter = require('./routes/publicBookings');
 app.use('/api/public/bookings', publicBookingsRouter);
+/** Debug trace for Render — runs before auth so failed auth still appears in logs */
+function debugLogSyncBookingRoute(req, res, next) {
+  console.log('SYNC ROUTE HIT');
+  console.log('Auth header:', req.headers.authorization);
+  console.log('SYNC BODY:', req.body);
+  next();
+}
 /** Alias for local → Render sync (same handler as POST /api/public/bookings) */
 app.post(
   '/api/sync/booking',
+  debugLogSyncBookingRoute,
   publicBookingsRouter.verifySyncSecret,
   publicBookingsRouter.handleInboundBookingSync
 );

@@ -197,10 +197,11 @@ function handleInboundBookingSync(req, res) {
   try {
     const body = req.body || {};
     const result = upsertBookingFromSync(body);
-    console.log('Synced booking to Render:', result.public_token);
+    console.log('Saved booking token:', result.public_token);
     const booking = db.prepare('SELECT * FROM bookings WHERE id = ?').get(result.bookingId);
     res.json({ success: true, booking });
   } catch (err) {
+    console.error('SYNC ERROR:', err);
     const msg = String(err.message || err);
     if (msg === 'SYNC_OWNER_USER_ID_INVALID') {
       return res.status(503).json({ error: 'SYNC_OWNER_USER_ID is not set on this server' });
@@ -214,8 +215,7 @@ function handleInboundBookingSync(req, res) {
     if (msg === 'CLIENT_RESOLVE_FAILED') {
       return res.status(400).json({ error: 'Could not resolve client' });
     }
-    console.error('publicBookings sync:', err);
-    res.status(500).json({ error: 'Sync failed' });
+    return res.status(500).json({ error: 'Sync failed' });
   }
 }
 
