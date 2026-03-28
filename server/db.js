@@ -110,7 +110,25 @@ async function init() {
     saveDb();
   }
 
+  ensurePlaceholderOwnerUserIfEmpty();
+
   console.log('✅ Database ready:', dbPath);
+}
+
+/** Fresh cloud DBs had no users (schema seed line is stripped); sync/bookings need a user_id owner. */
+function ensurePlaceholderOwnerUserIfEmpty() {
+  const row = prepare('SELECT COUNT(*) AS n FROM users').get();
+  if (!row || Number(row.n) > 0) return;
+  const bcrypt = require('bcryptjs');
+  const password_hash = bcrypt.hashSync('__vizodesk_sync_placeholder_not_for_login__', 12);
+  prepare('INSERT INTO users (email, password_hash, name) VALUES (?, ?, ?)').run(
+    'sync-owner@internal.vizodesk.local',
+    password_hash,
+    'Cloud sync owner'
+  );
+  console.log(
+    '[vizodesk] No user existed; created internal placeholder owner so booking sync can attach data. Register normally in the app when ready.'
+  );
 }
 
 function migrateBookingsColumns() {
