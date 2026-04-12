@@ -60,6 +60,10 @@ export default function InvoiceView() {
   const accent = data.business?.brand_color || '#6d28d9';
   const biz = data.business || {};
   const client = data.client;
+  const retainerAmt = Number(data.retainer_amount) || 0;
+  const showRetainer = retainerAmt > 0;
+  const summaryTotal =
+    data.total_after_retainer != null ? Number(data.total_after_retainer) : Number(data.total) || 0;
 
   return (
     <div className="min-h-screen bg-[#0c0c0f] text-slate-200 py-8 px-4 print:bg-white print:text-black">
@@ -142,7 +146,7 @@ export default function InvoiceView() {
             {(data.line_items || []).map((row, i) => (
               <div
                 key={i}
-                className="grid grid-cols-12 gap-2 text-sm px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 print:bg-white print:border-zinc-200"
+                className="grid grid-cols-12 gap-2 items-start text-sm px-3 py-3 border-t border-zinc-800 bg-zinc-900/50 print:bg-white print:border-zinc-200"
               >
                 <span className="col-span-5 text-slate-200 whitespace-pre-wrap print:text-zinc-900">{row.description || '—'}</span>
                 <span className="col-span-2 text-right tabular-nums text-slate-300 print:text-zinc-800">{row.quantity}</span>
@@ -169,9 +173,15 @@ export default function InvoiceView() {
                 <span className="tabular-nums whitespace-nowrap">({formatCurrency(data.discount_amount)})</span>
               </div>
             ) : null}
+            {showRetainer ? (
+              <div className="flex justify-between gap-4 text-emerald-400/90 print:text-emerald-800">
+                <span>Retainer</span>
+                <span className="tabular-nums whitespace-nowrap">({formatCurrency(retainerAmt)})</span>
+              </div>
+            ) : null}
             <div className="flex justify-between gap-4 pt-1 border-t border-zinc-800 print:border-zinc-300 font-semibold">
               <span>Total</span>
-              <span className="tabular-nums">{formatCurrency(data.total)}</span>
+              <span className="tabular-nums">{formatCurrency(summaryTotal)}</span>
             </div>
             {(data.payments || []).map((p, i) => (
               <p key={i} className="text-xs text-slate-500 pt-1 leading-snug print:text-zinc-600">

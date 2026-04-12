@@ -161,6 +161,7 @@ CREATE TABLE IF NOT EXISTS invoices (
   status TEXT DEFAULT 'draft',
   discount_label TEXT,
   public_token TEXT UNIQUE,
+  retainer_amount REAL,
   created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
   FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
   FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,

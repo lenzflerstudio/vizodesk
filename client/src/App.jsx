@@ -8,6 +8,7 @@ import NewBooking from './pages/NewBooking';
 import BookingDetail from './pages/BookingDetail';
 import Contracts from './pages/Contracts';
 import Payments from './pages/Payments';
+import InvoicePreviewPage from './pages/InvoicePreviewPage';
 import Calendar from './pages/Calendar';
 import Settings from './pages/Settings';
 import Taxes from './pages/Taxes';
@@ -53,6 +54,7 @@ export default function App() {
             <Route path="packages" element={<Packages />} />
             <Route path="contracts" element={<Contracts />} />
             <Route path="payments" element={<Payments />} />
+            <Route path="invoice/:id" element={<InvoicePreviewPage />} />
             <Route path="calendar" element={<Calendar />} />
             <Route path="taxes" element={<Taxes />} />
             <Route path="settings" element={<Settings />} />

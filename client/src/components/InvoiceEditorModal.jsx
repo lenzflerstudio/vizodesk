@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import toast from 'react-hot-toast';
 import { formatCurrency } from '../lib/formatCurrency';
+import { buildInvoiceLineDescriptionFromPackage } from '../lib/packageDisplay';
+import invoiceCss from '../styles/invoice.css?raw';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -38,75 +40,125 @@ function uid() {
   return `${Date.now()}-${Math.random().toString(36).slice(2, 9)}`;
 }
 
-function buildPreviewHtml({ form, settings, subtotal, discountAmount, total, businessLines, clientName }) {
+function formatLongDatePreview(iso) {
+  if (!iso) return '—';
+  const d = new Date(`${iso}T12:00:00`);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  return d.toLocaleDateString('en-US', { month: 'long', day: 'numeric', year: 'numeric' });
+}
+
+/** Same markup pattern as buildInvoicePrintHtml (invoicePrintDocument.js). */
+function formatLineItemDescriptionPreviewHtml(raw) {
+  const text = String(raw ?? '').trim() || '—';
+  const lines = text.split('\n');
+  const first = lines[0];
+  const rest = lines.slice(1).join('\n').trim();
+  const firstEsc = escapeHtml(first);
+  if (!rest) {
+    return first === '—' ? firstEsc : `<strong class="inv-doc-item-title">${firstEsc}</strong>`;
+  }
+  const restEsc = escapeHtml(rest).replace(/\n/g, '<br/>');
+  return `<strong class="inv-doc-item-title">${firstEsc}</strong><br/><span class="inv-doc-item-body">${restEsc}</span>`;
+}
+
+function buildPreviewHtml({ form, settings, subtotal, discountAmount, total, amountDue, businessLines, clientName }) {
   const logoForPreview = form.logo_data_url || settings?.business_logo_data_url;
+  const logoSrc = logoForPreview ? String(logoForPreview).replace(/"/g, '&quot;') : '';
   const accent = settings?.brand_color && /^#([0-9a-fA-F]{3}|[0-9a-fA-F]{6})$/.test(String(settings.brand_color))
     ? String(settings.brand_color).toLowerCase()
     : '#6d28d9';
-  const lines = form.line_items
+  const retStr = String(form.retainer_amount ?? '').trim();
+  const retParsed = retStr ? Math.round(parseFloat(retStr) * 100) / 100 : 0;
+  const showRetainerPreview = Number.isFinite(retParsed) && retParsed > 0;
+  const totalAfterRetainer = showRetainerPreview
+    ? Math.round(Math.max(0, total - retParsed) * 100) / 100
+    : total;
+  const lineRows = form.line_items
     .filter((l) => String(l.description || '').trim() || Number(l.quantity) > 0 || Number(l.unit_price) > 0)
     .map((l) => {
       const amt = Math.round((Number(l.quantity) || 0) * (Number(l.unit_price) || 0) * 100) / 100;
-      return `<tr><td style="padding:10px 8px;border-bottom:1px solid #e5e7eb">${escapeHtml(l.description || '—')}</td><td style="text-align:right;padding:10px 8px;border-bottom:1px solid #e5e7eb">${Number(l.quantity) || 0}</td><td style="text-align:right;padding:10px 8px;border-bottom:1px solid #e5e7eb">${formatCurrency(Number(l.unit_price) || 0)}</td><td style="text-align:right;padding:10px 8px;border-bottom:1px solid #e5e7eb;font-weight:600">${formatCurrency(amt)}</td></tr>`;
+      return `<tr>
+        <td class="cell-desc">${formatLineItemDescriptionPreviewHtml(l.description)}</td>
+        <td class="cell-num">${escapeHtml(String(Number(l.quantity) || 0))}</td>
+        <td class="cell-num">${formatCurrency(Number(l.unit_price) || 0)}</td>
+        <td class="cell-num cell-amt">${formatCurrency(amt)}</td>
+      </tr>`;
     })
     .join('');
   const discLabel = String(form.discount_label || '').trim();
   const showDiscLine = discountAmount > 0 && discLabel;
-  return `<!DOCTYPE html><html><head><meta charset="utf-8"/><title>Invoice preview</title>
-  <style>
-    body{font-family:system-ui,-apple-system,sans-serif;max-width:800px;margin:24px auto;color:#111;line-height:1.5;padding:0 12px}
-    .grid2{display:grid;grid-template-columns:1fr 1fr;gap:24px;margin-bottom:24px}
-    @media(max-width:640px){.grid2{grid-template-columns:1fr}}
-    h1{font-size:1.75rem;margin:0 0 4px;letter-spacing:.02em}
-    .sub{color:#5b21b6;font-size:0.95rem;margin:0 0 12px}
-    .biz{font-size:14px;color:#374151}
-    .bill{font-size:11px;font-weight:700;color:#6b7280;letter-spacing:.06em;margin-bottom:8px}
-    table.items{width:100%;border-collapse:collapse;margin:16px 0;border-radius:8px 8px 0 0;overflow:hidden}
-    table.items thead th{background:${accent};color:#fff;padding:10px 8px;font-size:11px;text-transform:uppercase;letter-spacing:.04em;text-align:left}
-    table.items thead th.num{text-align:right}
-    .box{background:#f3f4f6;padding:10px 12px;border-radius:8px;margin-top:8px;font-size:14px}
-    .tot{display:flex;justify-content:space-between;max-width:280px;margin-left:auto;margin-top:6px;font-size:14px}
-    .tot strong{font-size:15px}
-    .due-big{display:flex;justify-content:space-between;max-width:280px;margin-left:auto;margin-top:16px;padding-top:12px;border-top:1px solid #d1d5db;font-weight:700;font-size:1.15rem}
-    .disc{color:#047857}
-    @media print{.no-print{display:none}}
-  </style></head><body>
-  <div class="no-print" style="margin-bottom:16px"><button type="button" onclick="window.print()">Print</button></div>
-  <div class="grid2">
-    <div>${logoForPreview ? `<img src="${logoForPreview}" alt="" style="max-height:72px;object-fit:contain"/>` : ''}</div>
-    <div style="text-align:right">
-      <h1>${escapeHtml((form.title || 'Invoice').toUpperCase())}</h1>
-      ${form.summary ? `<p class="sub">${escapeHtml(form.summary)}</p>` : ''}
-      <div class="biz" style="text-align:right">${businessLines.map(escapeHtml).join('<br/>')}</div>
+  const invNo = escapeHtml(form.invoice_number || '—');
+  const cur = escapeHtml(form.currency || 'USD');
+  const summaryBlock = form.summary ? `<p class="inv-doc-sub">${escapeHtml(form.summary)}</p>` : '';
+  const poRow = form.po_number
+    ? `<div class="inv-doc-meta-row"><span class="inv-doc-meta-lbl">P.O./S.O.</span><span class="inv-doc-meta-val">${escapeHtml(form.po_number)}</span></div>`
+    : '';
+  const notesHtml = form.notes_terms
+    ? `<div class="inv-doc-notes"><strong>Notes / Terms</strong><pre class="inv-doc-notes-pre">${escapeHtml(form.notes_terms)}</pre></div>`
+    : '';
+  const footerHtml = form.footer ? `<div class="inv-doc-footer">${escapeHtml(form.footer)}</div>` : '';
+
+  let summaryHtml;
+  if (showRetainerPreview) {
+    summaryHtml = `<div class="inv-doc-tot"><span class="inv-doc-tot-muted">Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
+${showDiscLine ? `<div class="inv-doc-tot inv-doc-disc"><span>${escapeHtml(discLabel)}</span><span>(${formatCurrency(discountAmount)})</span></div>` : ''}
+<div class="inv-doc-retainer"><span>Retainer</span><span>(${formatCurrency(retParsed)})</span></div>
+<div class="inv-doc-tot inv-doc-tot-divider"><span>Total</span><span><strong>${formatCurrency(totalAfterRetainer)}</strong></span></div>
+<div class="inv-doc-due-big"><span>Amount Due (${cur})</span><span>${formatCurrency(amountDue)}</span></div>`;
+  } else {
+    summaryHtml = `<div class="inv-doc-tot"><span class="inv-doc-tot-muted">Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
+${showDiscLine ? `<div class="inv-doc-tot inv-doc-disc"><span>${escapeHtml(discLabel)}</span><span>(${formatCurrency(discountAmount)})</span></div>` : ''}
+<div class="inv-doc-tot inv-doc-tot-divider"><span>Total</span><span><strong>${formatCurrency(total)}</strong></span></div>
+<div class="inv-doc-due-big"><span>Amount Due (${cur})</span><span>${formatCurrency(amountDue)}</span></div>`;
+  }
+
+  const toolbarHtml = `<div class="no-print inv-doc-toolbar">
+    <button type="button" onclick="window.print()">Print</button>
+  </div>`;
+
+  const bodyInner = `${toolbarHtml}
+<div class="inv-doc-root" style="--inv-accent:${accent}">
+  <div class="inv-doc-grid2">
+    <div>${logoSrc ? `<img src="${logoSrc}" alt="" class="inv-doc-logo"/>` : ''}</div>
+    <div class="inv-doc-right">
+      <h1 class="inv-doc-h1">${escapeHtml((form.title || 'Invoice').toUpperCase())}</h1>
+      ${summaryBlock}
+      <div class="inv-doc-biz inv-doc-biz-right">${businessLines.map(escapeHtml).join('<br/>')}</div>
     </div>
   </div>
-  <div class="grid2">
+  <div class="inv-doc-grid2">
     <div>
-      <div class="bill">BILL TO</div>
-      <div class="biz">${escapeHtml(clientName || '—')}</div>
+      <div class="inv-doc-bill">BILL TO</div>
+      <div class="inv-doc-biz"><p class="inv-doc-client-name">${escapeHtml(clientName || '—')}</p></div>
     </div>
-    <div style="text-align:right;font-size:14px">
-      <div style="display:flex;justify-content:flex-end;gap:16px;margin-bottom:6px"><span style="color:#6b7280">Invoice number</span><span style="font-weight:600">${escapeHtml(form.invoice_number || '—')}</span></div>
-      <div style="display:flex;justify-content:flex-end;gap:16px;margin-bottom:6px"><span style="color:#6b7280">Invoice date</span><span>${escapeHtml(form.invoice_date)}</span></div>
-      <div style="display:flex;justify-content:flex-end;gap:16px;margin-bottom:6px"><span style="color:#6b7280">Payment due</span><span>${escapeHtml(form.payment_due_date || '—')}</span></div>
-      ${form.po_number ? `<div style="display:flex;justify-content:flex-end;gap:16px;margin-bottom:6px"><span style="color:#6b7280">P.O./S.O.</span><span>${escapeHtml(form.po_number)}</span></div>` : ''}
-      <div class="box" style="text-align:right">
-        <span style="color:#6b7280;font-size:11px;text-transform:uppercase">Amount due (${escapeHtml(form.currency)})</span><br/>
-        <span style="font-size:1.25rem;font-weight:700">${formatCurrency(total)}</span>
+    <div class="inv-doc-right">
+      <div class="inv-doc-meta-row"><span class="inv-doc-meta-lbl">Invoice number</span><span class="inv-doc-meta-val">${invNo}</span></div>
+      <div class="inv-doc-meta-row"><span class="inv-doc-meta-lbl">Invoice date</span><span class="inv-doc-meta-val">${escapeHtml(formatLongDatePreview(form.invoice_date))}</span></div>
+      <div class="inv-doc-meta-row"><span class="inv-doc-meta-lbl">Payment due</span><span class="inv-doc-meta-val">${escapeHtml(formatLongDatePreview(form.payment_due_date))}</span></div>
+      ${poRow}
+      <div class="inv-doc-box">
+        <span class="inv-doc-box-label">Amount due (${cur})</span><br/>
+        <span class="inv-doc-box-amount">${formatCurrency(amountDue)}</span>
       </div>
     </div>
   </div>
-  <table class="items">
+  <table class="inv-doc-items">
+    <colgroup>
+      <col class="col-desc" />
+      <col class="col-qty" />
+      <col class="col-price" />
+      <col class="col-amt" />
+    </colgroup>
     <thead><tr><th>Items</th><th class="num">Quantity</th><th class="num">Price</th><th class="num">Amount</th></tr></thead>
-    <tbody>${lines}</tbody>
+    <tbody>${lineRows}</tbody>
   </table>
-  <div class="tot"><span style="color:#6b7280">Subtotal</span><span>${formatCurrency(subtotal)}</span></div>
-  ${showDiscLine ? `<div class="tot disc"><span>${escapeHtml(discLabel)}</span><span>(${formatCurrency(discountAmount)})</span></div>` : ''}
-  <div class="tot" style="margin-top:10px;padding-top:10px;border-top:1px solid #e5e7eb"><span>Total</span><span><strong>${formatCurrency(total)}</strong></span></div>
-  <div class="due-big"><span>Amount due (${escapeHtml(form.currency)})</span><span>${formatCurrency(total)}</span></div>
-  ${form.notes_terms ? `<div style="margin-top:28px;font-size:13px"><strong>Notes / Terms</strong><pre style="white-space:pre-wrap;font-family:inherit;margin-top:8px;color:#374151">${escapeHtml(form.notes_terms)}</pre></div>` : ''}
-  ${form.footer ? `<div style="margin-top:20px;font-size:12px;color:#6b7280;border-top:1px solid #eee;padding-top:14px">${escapeHtml(form.footer)}</div>` : ''}
-  </body></html>`;
+  ${summaryHtml}
+  ${notesHtml}
+  ${footerHtml}
+</div>`;
+
+  return `<!DOCTYPE html><html lang="en"><head><meta charset="utf-8"/><title>Invoice preview</title>
+<style>${invoiceCss}</style></head><body>${bodyInner}</body></html>`;
 }
 
 function escapeHtml(s) {
@@ -126,6 +178,8 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
   const [termKey, setTermKey] = useState('on_receipt');
   const [showDiscount, setShowDiscount] = useState(false);
   const [footerOpen, setFooterOpen] = useState(false);
+  const [packages, setPackages] = useState([]);
+  const [packagePick, setPackagePick] = useState('');
   const [form, setForm] = useState({
     title: 'Invoice',
     summary: '',
@@ -144,6 +198,7 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
     discount_type: 'none',
     discount_value: 0,
     discount_label: '',
+    retainer_amount: '',
     line_items: [{ _key: uid(), description: '', quantity: 1, unit_price: 0 }],
   });
 
@@ -179,6 +234,10 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
             discount_type: dt,
             discount_value: inv.discount_value ?? 0,
             discount_label: inv.discount_label || '',
+            retainer_amount:
+              inv.retainer_amount != null && inv.retainer_amount !== ''
+                ? String(inv.retainer_amount)
+                : '',
             line_items:
               (inv.line_items || []).length > 0
                 ? (inv.line_items || []).map((li) => ({
@@ -215,6 +274,7 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
       discount_type: 'none',
       discount_value: 0,
       discount_label: '',
+      retainer_amount: '',
       line_items: [{ _key: uid(), description: '', quantity: 1, unit_price: 0 }],
     };
     setTermKey('on_receipt');
@@ -229,6 +289,58 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
         setForm({ ...base, invoice_number: '' });
       });
   }, [open, invoiceId]);
+
+  useEffect(() => {
+    if (!open) return;
+    api
+      .getPackages()
+      .then(setPackages)
+      .catch(() => {
+        setPackages([]);
+      });
+  }, [open]);
+
+  const insertLineFromPackage = (packageId) => {
+    const id = Number(packageId);
+    const pkg = packages.find((p) => Number(p.id) === id);
+    if (!pkg) return;
+    const description = buildInvoiceLineDescriptionFromPackage(pkg);
+    if (!description.trim()) {
+      toast.error('This package has no title or details to insert');
+      return;
+    }
+    const unit =
+      pkg.suggested_price != null && Number.isFinite(Number(pkg.suggested_price))
+        ? Math.round(Number(pkg.suggested_price) * 100) / 100
+        : 0;
+    setForm((f) => {
+      const oneEmpty =
+        f.line_items.length === 1 &&
+        !String(f.line_items[0].description || '').trim() &&
+        !(Number(f.line_items[0].unit_price) > 0);
+      if (oneEmpty) {
+        return {
+          ...f,
+          line_items: [
+            {
+              _key: f.line_items[0]._key,
+              description,
+              quantity: 1,
+              unit_price: unit,
+            },
+          ],
+        };
+      }
+      return {
+        ...f,
+        line_items: [
+          ...f.line_items,
+          { _key: uid(), description, quantity: 1, unit_price: unit },
+        ],
+      };
+    });
+    toast.success(`Inserted “${pkg.label || 'package'}”`);
+  };
 
   const businessLines = useMemo(() => {
     const s = settings || {};
@@ -255,6 +367,14 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
     }
     return { subtotal: sub, discountAmount: disc, total: Math.round((sub - disc) * 100) / 100 };
   }, [form.line_items, form.discount_type, form.discount_value, showDiscount]);
+
+  const amountDuePreview = useMemo(() => {
+    const t = String(form.retainer_amount ?? '').trim();
+    if (!t) return total;
+    const ret = Math.round(parseFloat(t) * 100) / 100;
+    if (!Number.isFinite(ret) || ret <= 0) return total;
+    return Math.round(Math.max(0, total - ret) * 100) / 100;
+  }, [form.retainer_amount, total]);
 
   const handle = (e) => {
     const { name, value } = e.target;
@@ -336,7 +456,16 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
 
   const openPreview = () => {
     const clientName = clients.find((c) => String(c.id) === String(form.client_id))?.full_name || '';
-    const html = buildPreviewHtml({ form, settings, subtotal, discountAmount, total, businessLines, clientName });
+    const html = buildPreviewHtml({
+      form,
+      settings,
+      subtotal,
+      discountAmount,
+      total,
+      amountDue: amountDuePreview,
+      businessLines,
+      clientName,
+    });
     const w = window.open('', '_blank');
     if (w) {
       w.document.write(html);
@@ -384,6 +513,12 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
         discount_type: showDiscount ? form.discount_type : 'none',
         discount_value: showDiscount ? form.discount_value : 0,
         discount_label: showDiscount ? form.discount_label : '',
+        retainer_amount: (() => {
+          const t = String(form.retainer_amount ?? '').trim();
+          if (!t) return null;
+          const n = parseFloat(t);
+          return Number.isNaN(n) || n < 0 ? null : Math.round(n * 100) / 100;
+        })(),
         line_items: lines,
       };
       const inv = invoiceId ? await api.updateInvoice(invoiceId, payload) : await api.createInvoice(payload);
@@ -551,6 +686,33 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                 <Plus size={14} /> Add an item
               </button>
             </div>
+            {packages.length > 0 ? (
+              <div className="mb-3 max-w-md">
+                <label className="label" htmlFor="invoice-package-insert">
+                  Insert from package
+                </label>
+                <select
+                  id="invoice-package-insert"
+                  className="input text-sm"
+                  value={packagePick}
+                  onChange={(e) => {
+                    const v = e.target.value;
+                    setPackagePick(v);
+                    if (v) {
+                      insertLineFromPackage(v);
+                      setPackagePick('');
+                    }
+                  }}
+                >
+                  <option value="">Choose a package…</option>
+                  {packages.map((p) => (
+                    <option key={p.id} value={p.id}>
+                      {p.label || `Package #${p.id}`}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
             <div className="overflow-x-auto rounded-lg border border-surface-border">
               <table className="w-full text-sm min-w-[520px]">
                 <thead
@@ -575,15 +737,16 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                     const amt = Math.round((Number(row.quantity) || 0) * (Number(row.unit_price) || 0) * 100) / 100;
                     return (
                       <tr key={row._key} className="bg-surface-overlay/20">
-                        <td className="px-2 py-2">
-                          <input
-                            className="input py-1.5 text-sm"
+                        <td className="px-2 py-2 align-top">
+                          <textarea
+                            className="input py-1.5 text-sm min-h-[4.5rem] resize-y w-full"
                             placeholder="Description"
+                            rows={3}
                             value={row.description}
                             onChange={(e) => updateLine(row._key, 'description', e.target.value)}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2 align-top">
                           <input
                             type="number"
                             min={0}
@@ -593,7 +756,7 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                             onChange={(e) => updateLine(row._key, 'quantity', e.target.value)}
                           />
                         </td>
-                        <td className="px-2 py-2">
+                        <td className="px-2 py-2 align-top">
                           <input
                             type="number"
                             min={0}
@@ -603,8 +766,8 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                             onChange={(e) => updateLine(row._key, 'unit_price', e.target.value)}
                           />
                         </td>
-                        <td className="px-3 py-2 text-right text-slate-200 tabular-nums">{formatCurrency(amt)}</td>
-                        <td className="px-1 py-2">
+                        <td className="px-3 py-2 align-top text-right text-slate-200 tabular-nums">{formatCurrency(amt)}</td>
+                        <td className="px-1 py-2 align-top">
                           <button
                             type="button"
                             className="p-1.5 text-slate-500 hover:text-red-400 rounded"
@@ -698,9 +861,22 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                 <span className="text-slate-300 font-medium">Total</span>
                 <span className="text-white font-semibold tabular-nums">{formatCurrency(total)}</span>
               </div>
+              <div className="w-full max-w-xs">
+                <label className="label text-xs text-slate-500">Retainer (deposit)</label>
+                <input
+                  type="number"
+                  name="retainer_amount"
+                  min={0}
+                  step={0.01}
+                  className="input text-sm"
+                  placeholder="Retainer Amount"
+                  value={form.retainer_amount}
+                  onChange={handle}
+                />
+              </div>
               <div className="w-full max-w-xs rounded-lg bg-brand/15 border border-brand/30 px-4 py-3 mt-1">
                 <p className="text-xs text-slate-400 uppercase tracking-wide">Amount due</p>
-                <p className="text-xl font-bold text-white tabular-nums">{formatCurrency(total)}</p>
+                <p className="text-xl font-bold text-white tabular-nums">{formatCurrency(amountDuePreview)}</p>
               </div>
             </div>
           </div>

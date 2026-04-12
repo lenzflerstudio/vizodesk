@@ -415,6 +415,7 @@ function migrateInvoices() {
       status TEXT DEFAULT 'draft',
       discount_label TEXT,
       public_token TEXT,
+      retainer_amount REAL,
       created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
       FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
       FOREIGN KEY (client_id) REFERENCES clients(id) ON DELETE SET NULL,
@@ -458,6 +459,7 @@ function migrateInvoiceExtensions() {
       const colnames = new Set(invInfo[0].values.map((r) => r[nameIdx]));
       if (!colnames.has('discount_label')) _db.run('ALTER TABLE invoices ADD COLUMN discount_label TEXT;');
       if (!colnames.has('public_token')) _db.run('ALTER TABLE invoices ADD COLUMN public_token TEXT;');
+      if (!colnames.has('retainer_amount')) _db.run('ALTER TABLE invoices ADD COLUMN retainer_amount REAL;');
     }
   }
 

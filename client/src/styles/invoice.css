@@ -1,0 +1,390 @@
+/* Shared invoice layout — loaded by the app (preview host) and injected into print/PDF HTML via ?raw. */
+@page {
+  margin: 12mm 14mm;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html {
+  -webkit-print-color-adjust: exact;
+  print-color-adjust: exact;
+  color-adjust: exact;
+  color-scheme: only light;
+}
+
+body {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.inv-doc-root {
+  --inv-accent: #6d28d9;
+  font-family: 'Helvetica Neue', Helvetica, Arial, 'DejaVu Sans', sans-serif;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.5;
+  color: #111827;
+  max-width: 1000px;
+  margin: 0 auto;
+  padding: 8px 6px 36px;
+  background: #fff !important;
+}
+
+/* Uniform size/weight for all invoice content; only the title is larger (see .inv-doc-h1). */
+.inv-doc-root * {
+  font-size: inherit;
+  font-weight: 400;
+}
+
+.inv-doc-root .inv-doc-h1 {
+  font-size: 1.65rem;
+  font-weight: 700;
+}
+
+.inv-doc-grid2 {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px 28px;
+  margin-bottom: 18px;
+}
+
+@media (max-width: 640px) {
+  .inv-doc-grid2 {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Title row stays in normal flow; rule is on the next grid so translateY hacks are not needed. */
+.inv-doc-root > .inv-doc-grid2:first-child {
+  margin-bottom: 0;
+}
+
+.inv-doc-root > .inv-doc-grid2:first-child + .inv-doc-grid2 {
+  border-top: 1px solid #e5e7eb;
+  padding-top: 16px;
+  margin-top: 50px;
+}
+
+.inv-doc-h1 {
+  margin: 0 0 6px;
+  letter-spacing: 0.04em;
+  line-height: 1.2;
+}
+
+.inv-doc-sub {
+  color: #5b21b6;
+  margin: 0 0 10px;
+}
+
+.inv-doc-biz {
+  color: #374151;
+  line-height: 1.55;
+}
+
+.inv-doc-biz-right {
+  text-align: right;
+}
+
+.inv-doc-bill {
+  color: #9ca3af;
+  letter-spacing: 0.08em;
+  margin-bottom: 10px;
+}
+
+/* Bill To (client) — same line-height / row rhythm as .inv-doc-meta-row */
+.inv-doc-bill + .inv-doc-biz {
+  line-height: 1.2;
+}
+
+.inv-doc-bill + .inv-doc-biz p {
+  margin: 0;
+}
+
+.inv-doc-bill + .inv-doc-biz p + p {
+  margin-top: 4px;
+}
+
+/* Meta block: 2-column alignment (labels | values). Rows share 420px width with .inv-doc-box. */
+.inv-doc-meta {
+  display: grid;
+  grid-template-columns: 160px auto;
+  column-gap: 12px;
+  row-gap: 6px;
+  justify-content: end;
+}
+
+.inv-doc-meta-row {
+  /* invoice number, invoice date, payment due */
+  display: grid;
+  grid-template-columns: 160px auto;
+  column-gap: 12px;
+  line-height: 1.2;   /* 🔥 tighter rows */
+  margin-bottom: 4px; /* 🔥 controls spacing between lines */
+  width: 420px;
+  margin-left: auto;
+  transform: translateX(120px);
+  justify-content: stretch;
+}
+
+.inv-doc-meta-lbl {
+  color: #000;
+  text-align: right;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.inv-doc-meta-val {
+  color: #111827;
+  text-align: left;
+  min-width: 0;
+}
+
+.inv-doc-right {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  text-align: left;
+}
+
+.inv-doc-logo {
+  max-height: 72px;
+  object-fit: contain;
+}
+
+.inv-doc-client-name {
+  color: #000;
+  margin: 0;
+}
+
+.inv-doc-box {
+  
+  display: grid;
+  grid-template-columns: 160px auto;
+  column-gap: 12px;
+  align-items: center;
+  width: 420px;
+  margin-left: auto;
+  margin-bottom: 6px;
+  background: #e5e7eb;
+  padding: 0;          /* 🔥 key fix */
+  height: 20px;        /* 🔥 replaces padding */
+  transform: translateX(120px);   /* ✅ SAME as meta rows */
+}
+
+.inv-doc-box > br {
+  display: none;
+}
+
+.inv-doc-box-label {
+  text-align: right;
+  color: #000;
+  text-transform: none;
+  letter-spacing: 0.06em;
+  white-space: nowrap;
+  min-width: 0;
+  font-weight: 700;
+}
+
+.inv-doc-box-amount {
+  text-align: left;
+  color: #111827;
+  line-height: 1.25;
+  white-space: nowrap;
+  min-width: 0;
+  font-weight: 700;
+}
+
+table.inv-doc-items {
+  width: 100% !important;
+  max-width: none;
+  border-collapse: collapse;
+  margin: 26px 0 12px;
+  table-layout: fixed;
+  border: 1px solid var(--inv-accent);
+  border-radius: 6px 6px 0 0;
+  overflow: hidden;
+}
+
+table.inv-doc-items col.col-desc {
+  width: 60%;
+}
+
+table.inv-doc-items col.col-qty {
+  width: 13.34%;
+}
+
+table.inv-doc-items col.col-price {
+  width: 13.33%;
+}
+
+table.inv-doc-items col.col-amt {
+  width: 13.33%;
+}
+
+table.inv-doc-items thead th:nth-child(1),
+table.inv-doc-items tbody td:nth-child(1) {
+  width: 60%;
+  min-width: 0;
+}
+
+table.inv-doc-items thead th:nth-child(2),
+table.inv-doc-items thead th:nth-child(3),
+table.inv-doc-items thead th:nth-child(4),
+table.inv-doc-items tbody td:nth-child(2),
+table.inv-doc-items tbody td:nth-child(3),
+table.inv-doc-items tbody td:nth-child(4) {
+  width: 13.333%;
+}
+
+table.inv-doc-items thead th {
+  background: var(--inv-accent) !important;
+  color: #fff !important;
+  padding: 11px 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+  text-align: left;
+  border-bottom: 2px solid rgba(0, 0, 0, 0.12);
+  vertical-align: middle;
+  box-sizing: border-box;
+}
+
+table.inv-doc-items thead th.num {
+  text-align: right;
+}
+
+table.inv-doc-items tbody td {
+  vertical-align: top !important;
+  padding: 14px 12px;
+  line-height: 1.45;
+  color: #111827;
+  border-bottom: 1px solid #e5e7eb;
+  background: #fff !important;
+  box-sizing: border-box;
+}
+
+table.inv-doc-items tbody td.cell-desc {
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
+  word-break: break-word;
+  max-width: none;
+}
+
+table.inv-doc-items tbody tr:last-child td {
+  border-bottom: none;
+}
+
+table.inv-doc-items tbody td.cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.inv-doc-item-title {
+  color: #111827;
+}
+
+.inv-doc-item-body {
+  color: #4b5563;
+  white-space: pre-line;
+}
+
+.inv-doc-tot {
+  display: flex;
+  justify-content: space-between;
+  max-width: 300px;
+  margin-left: auto;
+  margin-top: 8px;
+}
+
+.inv-doc-tot-muted {
+  color: #6b7280;
+}
+
+.inv-doc-tot-divider {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #e5e7eb;
+}
+
+.inv-doc-disc {
+  color: #047857;
+}
+
+.inv-doc-retainer {
+  display: flex;
+  justify-content: space-between;
+  max-width: 300px;
+  margin-left: auto;
+  margin-top: 8px;
+  color: #047857;
+}
+
+.inv-doc-due-big {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  max-width: 300px;
+  margin-left: auto;
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 2px solid #d1d5db;
+}
+
+.inv-doc-due-big strong {
+  font-weight: 400;
+}
+
+.inv-doc-tot strong {
+  font-weight: 400;
+}
+
+.inv-doc-pay-note {
+  color: #6b7280;
+  margin: 14px 0 0;
+  line-height: 1.45;
+}
+
+.inv-doc-notes {
+  margin-top: 28px;
+}
+
+.inv-doc-notes-pre {
+  white-space: pre-wrap;
+  font-family: inherit;
+  margin-top: 8px;
+  color: #374151;
+}
+
+.inv-doc-footer {
+  margin-top: 20px;
+  color: #6b7280;
+  border-top: 1px solid #eee;
+  padding-top: 14px;
+}
+
+.inv-doc-toolbar {
+  margin-bottom: 16px;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.inv-doc-toolbar-hint {
+  color: #6b7280;
+}
+
+@media print {
+  .no-print {
+    display: none !important;
+  }
+
+  .inv-doc-root {
+    padding-top: 0;
+  }
+}

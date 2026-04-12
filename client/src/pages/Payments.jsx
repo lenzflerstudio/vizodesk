@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { api } from '../lib/api';
 import {
   CreditCard,
@@ -21,7 +22,11 @@ import { formatCurrency } from '../lib/formatCurrency';
 import InvoiceEditorModal from '../components/InvoiceEditorModal';
 import { useAuth } from '../contexts/AuthContext';
 import { clientBookingPortalUrl, clientInvoicePortalUrl } from '../lib/portalLinks';
-import { buildInvoicePrintHtml } from '../lib/invoicePrintDocument';
+import {
+  buildInvoicePrintHtml,
+  openHtmlInBlobWindow,
+  printWhenBlobWindowReady,
+} from '../lib/invoicePrintDocument';
 import SendClientDocumentsModal from '../components/SendClientDocumentsModal';
 import {
   downloadBookingPaymentReceiptPdf as saveBookingReceiptPdf,
@@ -212,6 +217,7 @@ function RecordInvoicePaymentModal({ invoiceId, onClose, onSaved }) {
 }
 
 export default function Payments() {
+  const navigate = useNavigate();
   const { clientPortalBaseUrl, user } = useAuth();
   const [payments, setPayments] = useState([]);
   const [invoices, setInvoices] = useState([]);
@@ -263,50 +269,20 @@ export default function Payments() {
     refresh();
   };
 
-  const openInvoiceView = async (inv) => {
-    const tok = inv.public_token;
-    if (tok) {
-      const r = clientInvoicePortalUrl(clientPortalBaseUrl, tok);
-      if (r.ok) {
-        window.open(r.url, '_blank', 'noopener,noreferrer');
-        return;
-      }
-    }
-    try {
-      const full = await api.getInvoice(inv.id);
-      const html = buildInvoicePrintHtml(full, settings || {});
-      const w = window.open('', '_blank');
-      if (!w) {
-        toast.error('Popup blocked — allow popups to view the invoice');
-        return;
-      }
-      w.document.write(html);
-      w.document.close();
-    } catch (e) {
-      toast.error(e.message || 'Failed to open invoice');
-    }
+  const openInvoiceView = (inv) => {
+    navigate(`/invoice/${inv.id}`);
   };
 
   const downloadInvoicePdf = async (inv) => {
     try {
       const full = await api.getInvoice(inv.id);
       const html = buildInvoicePrintHtml(full, settings || {});
-      const w = window.open('', '_blank');
-      if (!w) {
+      const { ok, window: w } = openHtmlInBlobWindow(html);
+      if (!ok || !w) {
         toast.error('Popup blocked — allow popups to print or save as PDF');
         return;
       }
-      w.document.write(html);
-      w.document.close();
-      const runPrint = () => {
-        try {
-          w.focus();
-          w.print();
-        } catch {
-          /* ignore */
-        }
-      };
-      setTimeout(runPrint, 300);
+      printWhenBlobWindowReady(w);
     } catch (e) {
       toast.error(e.message || 'Failed to open print view');
     }

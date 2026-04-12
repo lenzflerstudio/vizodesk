@@ -30,6 +30,37 @@ function computeLines(rawLines) {
   return { normalized, subtotal: round2(subtotal) };
 }
 
+/** Omit key = leave unchanged (PUT); null/'' = clear; number = set */
+function parseRetainerAmount(body) {
+  if (!Object.prototype.hasOwnProperty.call(body, 'retainer_amount')) {
+    return { kind: 'omit' };
+  }
+  if (body.retainer_amount === null || body.retainer_amount === '') {
+    return { kind: 'null' };
+  }
+  const r = round2(parseFloat(body.retainer_amount));
+  if (Number.isNaN(r) || r < 0) return { error: 'Invalid retainer amount' };
+  return { kind: 'value', n: r };
+}
+
+/** Positive retainer credit from stored invoice row (0 if unset / invalid). */
+function retainerCreditFromRow(inv) {
+  if (!inv) return 0;
+  const r = inv.retainer_amount;
+  if (r === undefined || r === null || String(r).trim() === '') return 0;
+  const n = round2(parseFloat(r));
+  if (Number.isNaN(n) || n <= 0) return 0;
+  return n;
+}
+
+/** Invoice total after discount, minus retainer credit (amount owed before payments). */
+function invoiceBalanceBeforePayments(inv) {
+  const total = round2(parseFloat(inv.total) || 0);
+  const ret = retainerCreditFromRow(inv);
+  if (ret <= 0) return total;
+  return round2(Math.max(0, total - ret));
+}
+
 function applyDiscount(subtotal, discountType, discountValue) {
   const t =
     discountType === 'percent' ? 'percent' : discountType === 'amount' ? 'amount' : 'none';
@@ -71,7 +102,8 @@ function loadInvoice(userId, id) {
   const invoice_payments = loadInvoicePayments(id);
   const paid = invoice_payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
   const amount_paid = round2(paid);
-  const amount_remaining = Math.max(0, round2((parseFloat(inv.total) || 0) - paid));
+  const balanceBeforePayments = invoiceBalanceBeforePayments(inv);
+  const amount_remaining = Math.max(0, round2(balanceBeforePayments - paid));
   return { ...inv, line_items, invoice_payments, amount_paid, amount_remaining };
 }
 
@@ -113,8 +145,10 @@ router.get('/public/:token', (req, res) => {
       .get(inv.user_id);
 
     const paidSum = payments.reduce((s, p) => s + (parseFloat(p.amount) || 0), 0);
-    const total = parseFloat(inv.total) || 0;
-    const amount_due = Math.max(0, round2(total - paidSum));
+    const total = round2(parseFloat(inv.total) || 0);
+    const retainer = retainerCreditFromRow(inv);
+    const total_after_retainer = invoiceBalanceBeforePayments(inv);
+    const amount_due = Math.max(0, round2(total_after_retainer - paidSum));
 
     const discAmt = parseFloat(inv.discount_amount) || 0;
     const discLabel = inv.discount_label && String(inv.discount_label).trim();
@@ -135,7 +169,9 @@ router.get('/public/:token', (req, res) => {
       discount_amount: inv.discount_amount,
       discount_label: discLabel || null,
       show_discount_line,
-      total: inv.total,
+      total,
+      total_after_retainer,
+      retainer_amount: retainer > 0 ? retainer : null,
       currency: inv.currency || 'USD',
       amount_due,
       logo_data_url: inv.logo_data_url,
@@ -205,7 +241,8 @@ router.post('/:id/payments', auth, (req, res) => {
 
     const payRows = db.prepare('SELECT amount FROM invoice_payments WHERE invoice_id = ?').all(inv.id);
     const sum = payRows.reduce((s, r) => s + (parseFloat(r.amount) || 0), 0);
-    if (round2(sum) >= round2(parseFloat(inv.total) || 0) - 0.005) {
+    const owed = invoiceBalanceBeforePayments(inv);
+    if (round2(sum) >= owed - 0.005) {
       db.prepare("UPDATE invoices SET status = 'paid' WHERE id = ?").run(inv.id);
     }
 
@@ -247,12 +284,15 @@ router.put('/:id', auth, (req, res) => {
   try {
     const id = Number(req.params.id);
     const existing = db
-      .prepare('SELECT id FROM invoices WHERE id = ? AND user_id = ?')
+      .prepare('SELECT id, retainer_amount FROM invoices WHERE id = ? AND user_id = ?')
       .get(id, req.userId);
     if (!existing) return res.status(404).json({ error: 'Invoice not found' });
 
     const v = validateBody(req.body);
     if (v.error) return res.status(400).json({ error: v.error });
+
+    const retainerForRow =
+      v.retainerParse.kind === 'omit' ? existing.retainer_amount : v.retainerParse.kind === 'null' ? null : v.retainerParse.n;
 
     const client = db.prepare('SELECT id FROM clients WHERE id = ? AND user_id = ?').get(v.client_id, req.userId);
     if (!client) return res.status(400).json({ error: 'Invalid customer' });
@@ -269,7 +309,7 @@ router.put('/:id', auth, (req, res) => {
         client_id = ?, booking_id = ?, title = ?, summary = ?, invoice_number = ?, po_number = ?,
         invoice_date = ?, payment_due_date = ?, payment_terms_label = ?,
         subtotal = ?, discount_type = ?, discount_value = ?, discount_amount = ?, total = ?, currency = ?,
-        notes_terms = ?, footer = ?, logo_data_url = ?, status = ?, discount_label = ?
+        notes_terms = ?, footer = ?, logo_data_url = ?, status = ?, discount_label = ?, retainer_amount = ?
       WHERE id = ? AND user_id = ?`
     ).run(
       v.client_id,
@@ -292,6 +332,7 @@ router.put('/:id', auth, (req, res) => {
       v.logo_data_url,
       v.status,
       v.discount_label,
+      retainerForRow,
       id,
       req.userId
     );
@@ -335,6 +376,9 @@ function validateBody(body) {
 
   const disc = applyDiscount(subtotal, body.discount_type, body.discount_value);
 
+  const retainerParse = parseRetainerAmount(body);
+  if (retainerParse.error) return { error: retainerParse.error };
+
   let discount_label = null;
   if (disc.discount_amount > 0) {
     const dl = body.discount_label != null ? String(body.discount_label).trim().slice(0, 200) : '';
@@ -360,6 +404,7 @@ function validateBody(body) {
     status: ['sent', 'paid', 'draft'].includes(body.status) ? body.status : 'draft',
     normalized,
     subtotal,
+    retainerParse,
     ...disc,
   };
 }
@@ -380,14 +425,16 @@ router.post('/', auth, (req, res) => {
     const invDate = v.invoice_date || new Date().toISOString().slice(0, 10);
     const publicToken = uuidv4();
 
+    const retainerOnCreate = v.retainerParse.kind === 'value' ? v.retainerParse.n : null;
+
     const result = db
       .prepare(
         `INSERT INTO invoices (
           user_id, client_id, booking_id, title, summary, invoice_number, po_number,
           invoice_date, payment_due_date, payment_terms_label,
           subtotal, discount_type, discount_value, discount_amount, total, currency,
-          notes_terms, footer, logo_data_url, status, discount_label, public_token
-        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
+          notes_terms, footer, logo_data_url, status, discount_label, public_token, retainer_amount
+        ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)`
       )
       .run(
         req.userId,
@@ -411,7 +458,8 @@ router.post('/', auth, (req, res) => {
         v.logo_data_url,
         v.status,
         v.discount_label,
-        publicToken
+        publicToken,
+        retainerOnCreate
       );
 
     const id = result.lastInsertRowid;
