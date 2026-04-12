@@ -1,6 +1,5 @@
 require('dotenv').config();
 const express = require('express');
-const { spawn } = require('child_process');
 const path = require('path');
 const fs = require('fs');
 const cors = require('cors');
@@ -94,35 +93,6 @@ app.use((err, _req, res, _next) => {
   res.status(500).json({ error: 'Internal server error' });
 });
 
-function startNgrok(port) {
-  const ngrokProcess = spawn('ngrok', ['http', String(port)], {
-    stdio: ['ignore', 'pipe', 'pipe'],
-  });
-
-  ngrokProcess.stdout.on('data', (data) => {
-    const output = data.toString();
-    console.log(output);
-
-    const match = output.match(/https:\/\/[^\s]+/);
-    if (match) {
-      global.NGROK_URL = match[0];
-      console.log('🌐 Ngrok URL:', global.NGROK_URL);
-    }
-  });
-
-  ngrokProcess.stderr.on('data', (data) => {
-    console.error('Ngrok error:', data.toString());
-  });
-
-  ngrokProcess.on('error', (err) => {
-    console.error('Failed to start ngrok:', err.message);
-  });
-
-  ngrokProcess.on('close', (code) => {
-    console.log(`Ngrok exited with code ${code}`);
-  });
-}
-
 // ── Init DB, then listen (so API routes work before accepting traffic) ──────
 async function start() {
   await db.init();
@@ -133,12 +103,11 @@ async function start() {
     );
   }
 
-  app.listen(PORT, () => {
+  app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (hasClientBuild) {
       console.log(`Serving static files from ${clientDist}`);
     }
-    startNgrok(PORT);
   });
 }
 
