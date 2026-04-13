@@ -2,14 +2,14 @@
   "name": "vizodesk-server",
   "version": "1.0.0",
   "description": "VizoDesk API Server",
-  "main": "index.js",
+  "main": "start.js",
   "type": "commonjs",
   "engines": {
     "node": ">=20"
   },
   "scripts": {
-    "start": "node index.js",
-    "dev": "nodemon index.js"
+    "start": "node start.js",
+    "dev": "nodemon start.js"
   },
   "dependencies": {
     "bcryptjs": "^2.4.3",

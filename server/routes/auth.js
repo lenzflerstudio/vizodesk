@@ -6,8 +6,6 @@ const db = require('../db');
 const { getJwtSecret } = require('../lib/jwtSecret');
 const auth = require('../middleware/auth');
 
-const JWT_SECRET = getJwtSecret();
-
 // POST /api/auth/register
 router.post('/register', (req, res) => {
   try {
@@ -29,7 +27,7 @@ router.post('/register', (req, res) => {
     const insertTpl = db.prepare('INSERT INTO contract_templates (user_id, name, content) VALUES (?, ?, ?)');
     templates.forEach(t => insertTpl.run(result.lastInsertRowid, t.name, t.content));
 
-    const token = jwt.sign({ userId: result.lastInsertRowid, email }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: result.lastInsertRowid, email }, getJwtSecret(), { expiresIn: '7d' });
     res.json({ token, user: { id: result.lastInsertRowid, email, name } });
   } catch (err) {
     console.error(err);
@@ -48,7 +46,7 @@ router.post('/login', (req, res) => {
     if (!user || !bcrypt.compareSync(password, user.password_hash)) {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
-    const token = jwt.sign({ userId: user.id, email: user.email }, JWT_SECRET, { expiresIn: '7d' });
+    const token = jwt.sign({ userId: user.id, email: user.email }, getJwtSecret(), { expiresIn: '7d' });
     res.json({ token, user: { id: user.id, email: user.email, name: user.name } });
   } catch (err) {
     console.error(err);

@@ -15,7 +15,7 @@ function startServer() {
   }
 
   // In production, start bundled server
-  const serverPath = path.join(process.resourcesPath, 'server', 'index.js');
+  const serverPath = path.join(process.resourcesPath, 'server', 'start.js');
   const dbPath = path.join(app.getPath('userData'), 'vizodesk.db');
 
   serverProcess = spawn(process.execPath, [serverPath], {
