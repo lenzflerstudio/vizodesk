@@ -1,4 +1,5 @@
-require('dotenv').config();
+require('dotenv').config({ path: __dirname + '/.env' });
+console.log('JWT ENV CHECK:', process.env.JWT_SECRET);
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
