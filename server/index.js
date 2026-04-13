@@ -11,7 +11,11 @@ const { verifyOrigin } = require('./lib/corsOrigins');
 const publicBookingRouter = require('./routes/publicBooking');
 
 const app = express();
-const PORT = process.env.PORT || 10000;
+app.use((req, res, next) => {
+  console.log('➡️ Request:', req.method, req.url);
+  next();
+});
+const PORT = process.env.PORT || 3000;
 
 const clientDist = path.join(__dirname, '..', 'client', 'dist');
 const hasClientBuild = fs.existsSync(path.join(clientDist, 'index.html'));
@@ -68,13 +72,15 @@ app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' 
 // ── Admin SPA (Vite → client/dist) — after all /api routes ───────────────────
 if (hasClientBuild) {
   app.use(express.static(clientDist));
+  app.use('/assets', express.static(path.join(clientDist, 'assets')));
 
   // Direct visits to client routes (e.g. /booking/:token) must serve index.html so React Router runs.
   // Must come after express.static so real files (/assets/*, favicon, etc.) are not replaced.
   // app.use avoids path-to-regexp issues with app.get('*') on some Express versions.
   app.use((req, res, next) => {
     if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    if (req.path.startsWith('/api')) return next();
+    console.log('Serving static from:', clientDist);
+    if (req.path.startsWith('/api') || req.path.startsWith('/assets')) return next();
     res.sendFile(path.join(clientDist, 'index.html'), (err) => {
       if (err) next(err);
     });
