@@ -281,7 +281,9 @@ export default function NewBooking() {
   };
 
   const copyLink = () => {
-    const r = clientBookingPortalUrl(clientPortalBaseUrl, createdBooking.public_token);
+    const r = createdBooking?.booking_link
+      ? { ok: true, url: createdBooking.booking_link }
+      : clientBookingPortalUrl(clientPortalBaseUrl, createdBooking.public_token);
     if (!r.ok) {
       toast.error(r.error);
       return;
@@ -291,7 +293,9 @@ export default function NewBooking() {
   };
 
   const createdLink = createdBooking
-    ? clientBookingPortalUrl(clientPortalBaseUrl, createdBooking.public_token)
+    ? createdBooking.booking_link
+      ? { ok: true, url: createdBooking.booking_link }
+      : clientBookingPortalUrl(clientPortalBaseUrl, createdBooking.public_token)
     : null;
 
   if (createdBooking) {

@@ -23,7 +23,9 @@ function startServer() {
       ...process.env,
       NODE_ENV: 'production',
       PORT: '3001',
-      DB_PATH: dbPath,
+      DB_PATH: '/home/vizodesk/vizodesk/database/vizodesk.db',
+      /** Same SYNC_SECRET as vizodesk.com — POST /api/bookings accepts it via authOrSyncSecret */
+      BOOKING_CREATE_PROXY_TO_REMOTE: 'true',
     },
     cwd: path.join(process.resourcesPath, 'server'),
   });
@@ -40,8 +42,9 @@ function createWindow() {
   mainWindow = new BrowserWindow({
     width: 1400,
     height: 900,
-    minWidth: 1100,
-    minHeight: 700,
+    /* Allow narrow widths so (max-width: 768px) layout / drawer can apply */
+    minWidth: 360,
+    minHeight: 480,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,

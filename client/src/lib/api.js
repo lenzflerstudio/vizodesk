@@ -1,3 +1,4 @@
+// Admin auth (login/register/me) must use the local API base — never point VITE_API_URL at a remote host for auth.
 const API_BASE = import.meta.env.VITE_API_URL || '/api';
 
 function getToken() {
@@ -115,6 +116,8 @@ export const api = {
     request('GET', `/public/booking/${encodeURIComponent(token)}`, null, true),
   getStats: () => request('GET', '/bookings/stats'),
   createBooking: (data) => request('POST', '/bookings', data),
+  /** Same JSON shape as cloud sync payload; stores row with origin=cloud */
+  importCloudBooking: (payload) => request('POST', '/bookings/import-cloud', payload),
   updateBooking: (id, data) => request('PUT', `/bookings/${id}`, data),
   deleteBooking: (id) => request('DELETE', `/bookings/${id}`),
 

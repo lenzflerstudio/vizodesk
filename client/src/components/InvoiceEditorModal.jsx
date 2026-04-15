@@ -16,6 +16,8 @@ import toast from 'react-hot-toast';
 import { formatCurrency } from '../lib/formatCurrency';
 import { buildInvoiceLineDescriptionFromPackage } from '../lib/packageDisplay';
 import invoiceCss from '../styles/invoice.css?raw';
+import InvoiceDocumentCard from './InvoiceDocumentCard';
+import { buildInvoiceDocumentDataFromEditor } from '../lib/invoiceDocumentCardData';
 
 function todayISO() {
   return new Date().toISOString().slice(0, 10);
@@ -346,12 +348,50 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
     const s = settings || {};
     const lines = [];
     if (s.business_name) lines.push(s.business_name);
-    lines.push('United States');
     if (s.business_phone) lines.push(s.business_phone);
     if (s.business_email) lines.push(s.business_email);
     if (s.business_website) lines.push(s.business_website);
-    return lines.length ? lines : ['Your business (set in Settings)'];
+    return lines;
   }, [settings]);
+
+  const selectedClient = useMemo(
+    () => clients.find((c) => String(c.id) === String(form.client_id)),
+    [clients, form.client_id]
+  );
+
+  const clientDetailLines = useMemo(() => {
+    if (!selectedClient) return [];
+    const out = [];
+    if (selectedClient.email) out.push(String(selectedClient.email));
+    if (selectedClient.phone) out.push(String(selectedClient.phone));
+    return out;
+  }, [selectedClient]);
+
+  const invoicePreviewData = useMemo(
+    () =>
+      buildInvoiceDocumentDataFromEditor({
+        form,
+        settings,
+        clientName: selectedClient?.full_name || '',
+        clientLines: clientDetailLines,
+        subtotal,
+        discountAmount,
+        total,
+        amountDue: amountDuePreview,
+        showDiscount,
+      }),
+    [
+      form,
+      settings,
+      selectedClient,
+      clientDetailLines,
+      subtotal,
+      discountAmount,
+      total,
+      amountDuePreview,
+      showDiscount,
+    ]
+  );
 
   const { subtotal, discountAmount, total } = useMemo(() => {
     let sub = 0;
@@ -536,7 +576,7 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
 
   return (
     <div className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-start justify-center p-4 pt-6 sm:pt-10 overflow-y-auto">
-      <div className="card w-full max-w-5xl my-4 border-surface-border shadow-xl relative">
+      <div className="card w-full max-w-7xl my-4 border-surface-border shadow-xl relative">
         {loadEdit && (
           <div className="absolute inset-0 z-10 bg-surface/80 flex items-center justify-center rounded-xl">
             <Loader2 className="w-10 h-10 text-brand animate-spin" />
@@ -559,6 +599,8 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
         </div>
 
         <form id="invoice-form" onSubmit={submit} className="space-y-8" aria-busy={loadEdit}>
+          <div className="grid grid-cols-1 xl:grid-cols-[minmax(0,1fr)_minmax(280px,400px)] gap-8 xl:gap-10 items-start">
+            <div className="space-y-8 min-w-0">
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
             <div>
               <input ref={fileRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" className="hidden" onChange={onLogo} />
@@ -603,9 +645,11 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
                 />
               </div>
               <div className="rounded-lg border border-surface-border bg-surface-overlay/30 p-3 text-sm text-slate-300 space-y-0.5">
-                {businessLines.map((line, i) => (
-                  <p key={i}>{line}</p>
-                ))}
+                {businessLines.length > 0 ? (
+                  businessLines.map((line, i) => <p key={i}>{line}</p>)
+                ) : (
+                  <p className="text-slate-500">No business contact lines yet — add them in Settings.</p>
+                )}
                 <Link to="/settings" className="text-brand-light text-sm inline-block mt-2 hover:underline">
                   Edit your business details in Settings
                 </Link>
@@ -941,6 +985,22 @@ export default function InvoiceEditorModal({ open, onClose, onSaved, clients, bo
             <button type="button" onClick={onClose} className="btn-secondary text-sm">
               Cancel
             </button>
+          </div>
+            </div>
+
+            <aside className="xl:sticky xl:top-4 space-y-2 min-w-0 order-last xl:order-none">
+              <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">Invoice layout</p>
+              <p className="text-[11px] text-slate-600 leading-snug">
+                Live preview (PDF-style). Values follow the form; empty fields stay blank.
+              </p>
+              <div className="rounded-lg border border-surface-border bg-slate-100 p-2 sm:p-3 max-h-[min(70vh,720px)] overflow-y-auto overscroll-contain">
+                <InvoiceDocumentCard
+                  data={invoicePreviewData}
+                  accentColor={settings?.brand_color}
+                  className="shadow-md"
+                />
+              </div>
+            </aside>
           </div>
         </form>
       </div>

@@ -2,6 +2,17 @@ require('dotenv').config({
   path: require('path').resolve(__dirname, '.env')
 });
 
+process.on('unhandledRejection', (reason) => {
+  const msg = reason instanceof Error ? reason.stack || reason.message : String(reason);
+  console.error('[unhandledRejection]', msg);
+});
+
+// Do not call process.exit() here: it drops all connections and causes immediate 502s at the edge
+// while PM2 restarts. Log and rely on external health checks / orchestration for restart policy.
+process.on('uncaughtException', (err) => {
+  console.error('[uncaughtException]', err && err.stack ? err.stack : err);
+});
+
 const express = require('express');
 const path = require('path');
 const fs = require('fs');
@@ -33,20 +44,21 @@ app.use(
 // Default 100kb is too small for Settings payment_portal QR data URLs (base64 images).
 app.use(express.json({ limit: '2mb' }));
 
+// Auth is always this process (/api/auth/*). Desktop and admin SPA must not use a remote URL for login.
 app.use('/api/auth', require('./routes/auth'));
 app.use('/api/settings', require('./routes/settings'));
 app.use('/api/clients', require('./routes/clients'));
 app.use('/api/packages', require('./routes/packages'));
 const publicBookingsRouter = require('./routes/publicBookings');
 app.use('/api/public/bookings', publicBookingsRouter);
-/** Debug trace for Render — runs before auth so failed auth still appears in logs */
+/** Optional debug logging for inbound booking sync (set DEBUG_SYNC_BOOKING=1 only when needed) */
 function debugLogSyncBookingRoute(req, res, next) {
-  console.log('SYNC ROUTE HIT');
-  console.log('Auth header:', req.headers.authorization);
-  console.log('SYNC BODY:', req.body);
+  if (process.env.DEBUG_SYNC_BOOKING === '1') {
+    console.log('[sync/booking]', req.method, 'has_token', !!(req.body && req.body.public_token));
+  }
   next();
 }
-/** Alias for local → Render sync (same handler as POST /api/public/bookings) */
+/** Alias for local → cloud sync (same handler as POST /api/public/bookings) */
 app.post(
   '/api/sync/booking',
   debugLogSyncBookingRoute,
@@ -70,21 +82,35 @@ app.get('/api/booking/:token', publicBookingRouter.handlePublicBookingByToken);
 app.get('/api/health', (_req, res) => res.json({ status: 'ok', version: '1.0.0' }));
 
 // ── Admin SPA (Vite → client/dist) — after all /api routes ───────────────────
+const indexHtmlPath = path.join(clientDist, 'index.html');
+
+function sendSpaIndexHtml(req, res, next) {
+  if (req.method !== 'GET' && req.method !== 'HEAD') return next();
+  if (req.path.startsWith('/api') || req.path.startsWith('/assets')) return next();
+  if (!hasClientBuild) return next();
+
+  res.sendFile(indexHtmlPath, { maxAge: 0 }, (err) => {
+    if (err) {
+      console.error('[spa] sendFile failed:', indexHtmlPath, err.message || err);
+      if (!res.headersSent) {
+        res
+          .status(500)
+          .type('text/html')
+          .send(
+            '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Unavailable</title></head><body><p>App shell temporarily unavailable. Try <a href="/api/health">/api/health</a>.</p></body></html>'
+          );
+      }
+      return;
+    }
+  });
+}
+
 if (hasClientBuild) {
   app.use(express.static(clientDist));
   app.use('/assets', express.static(path.join(clientDist, 'assets')));
 
-  // Direct visits to client routes (e.g. /booking/:token) must serve index.html so React Router runs.
-  // Must come after express.static so real files (/assets/*, favicon, etc.) are not replaced.
-  // app.use avoids path-to-regexp issues with app.get('*') on some Express versions.
-  app.use((req, res, next) => {
-    if (req.method !== 'GET' && req.method !== 'HEAD') return next();
-    console.log('Serving static from:', clientDist);
-    if (req.path.startsWith('/api') || req.path.startsWith('/assets')) return next();
-    res.sendFile(path.join(clientDist, 'index.html'), (err) => {
-      if (err) next(err);
-    });
-  });
+  // Direct visits to client routes (e.g. /login, /booking/:token) must serve index.html for React Router.
+  app.use(sendSpaIndexHtml);
 }
 
 app.use((req, res) => {
@@ -98,8 +124,10 @@ app.use((req, res) => {
 });
 
 app.use((err, _req, res, _next) => {
-  console.error(err.stack);
-  res.status(500).json({ error: 'Internal server error' });
+  console.error(err && err.stack ? err.stack : err);
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'Internal server error' });
+  }
 });
 
 // ── Init DB, then listen (so API routes work before accepting traffic) ──────
@@ -108,15 +136,19 @@ async function start() {
 
   if (!hasClientBuild && process.env.NODE_ENV === 'production') {
     console.warn(
-      '⚠️  client/dist not found — run a client build before deploy (see render.yaml buildCommand).'
+      '⚠️  client/dist not found — run a client build before deploy (e.g. npm run build:client).'
     );
   }
 
-  app.listen(PORT, '0.0.0.0', () => {
+  const server = app.listen(PORT, '0.0.0.0', () => {
     console.log(`Server running on port ${PORT}`);
     if (hasClientBuild) {
       console.log(`Serving static files from ${clientDist}`);
     }
+  });
+  server.on('error', (err) => {
+    console.error('❌ HTTP server listen error:', err.message || err);
+    process.exit(1);
   });
 }
 

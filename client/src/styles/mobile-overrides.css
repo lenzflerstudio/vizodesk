@@ -1,0 +1,198 @@
+/**
+ * Mobile-only layout (max-width: 768px). Desktop is unchanged — all rules are
+ * scoped to this single breakpoint.
+ *
+ * `.layout-is-mobile` is toggled from JS with the same breakpoint so drawer
+ * rules still apply if media/CSS order differs (e.g. bundled Tailwind).
+ */
+
+/* ----- JS-synced mobile shell (mirrors max-width: 768px for drawer + slot) ----- */
+.app-layout-shell.layout-is-mobile .app-sidebar-container {
+  flex: 0 0 0 !important;
+  width: 0 !important;
+  min-width: 0 !important;
+  max-width: 0 !important;
+  overflow: visible !important;
+  align-self: stretch;
+}
+
+/* Mobile drawer position/transform — controlled in Layout.jsx (Tailwind) */
+
+.app-layout-shell.layout-is-mobile .app-sidebar-brand-text {
+  display: none !important;
+}
+
+.app-layout-shell.layout-is-mobile .app-sidebar-brand-row {
+  padding-left: 1rem !important;
+  padding-right: 1rem !important;
+  padding-top: 0.75rem !important;
+  padding-bottom: 0.75rem !important;
+}
+
+@media (max-width: 768px) {
+  .app-sidebar-brand-text {
+    display: none !important;
+  }
+
+  .app-sidebar-brand-row {
+    padding-left: 1rem !important;
+    padding-right: 1rem !important;
+    padding-top: 0.75rem !important;
+    padding-bottom: 0.75rem !important;
+  }
+
+  /* ----- Main shell: padding + no horizontal overflow ----- */
+  .app-main {
+    padding-left: 16px !important;
+    padding-right: 16px !important;
+  }
+
+  main {
+    min-width: 0;
+  }
+
+  /* Centered page shells → full width inside padded main */
+  main .mx-auto.max-w-lg,
+  main .mx-auto.max-w-2xl,
+  main .mx-auto.max-w-3xl {
+    margin-left: 0 !important;
+    margin-right: 0 !important;
+    max-width: none !important;
+    width: 100%;
+  }
+
+  main .max-w-4xl {
+    max-width: none !important;
+    width: 100%;
+  }
+
+  /* ----- Cards ----- */
+  .card {
+    width: 100%;
+    max-width: 100%;
+    padding: 1rem;
+  }
+
+  /* ----- Grids: stack at 768 (overrides Tailwind sm: from 640px) ----- */
+  .grid.grid-cols-1.sm\:grid-cols-2,
+  .grid.grid-cols-1.sm\:grid-cols-3 {
+    grid-template-columns: minmax(0, 1fr) !important;
+    gap: 14px;
+  }
+
+  .sm\:col-span-2 {
+    grid-column: span 1 / span 1 !important;
+  }
+
+  /* Sidebar slot: no flex width so main column is full viewport width */
+  .app-sidebar-container {
+    flex: 0 0 0 !important;
+    width: 0 !important;
+    min-width: 0 !important;
+    max-width: 0 !important;
+    overflow: visible !important;
+    align-self: stretch;
+  }
+
+  /* Drawer slide — Tailwind on .app-sidebar in Layout.jsx */
+
+  .app-sidebar-overlay {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 90;
+    background: rgba(0, 0, 0, 0.55);
+    border: 0;
+    padding: 0;
+    margin: 0;
+    cursor: pointer;
+    -webkit-tap-highlight-color: transparent;
+  }
+
+  /* ----- Buttons (touch + full-width groups) ----- */
+  .btn-primary,
+  .btn-secondary {
+    min-height: 44px;
+    box-sizing: border-box;
+  }
+
+  main form.space-y-5 > .flex.gap-3.justify-end {
+    flex-direction: column;
+    width: 100%;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  main form.space-y-5 > .flex.gap-3.justify-end > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  main .flex.gap-3:has(> .btn-primary) {
+    flex-direction: column;
+    width: 100%;
+    align-items: stretch;
+  }
+
+  main .flex.gap-3:has(> .btn-primary) > button {
+    width: 100%;
+    justify-content: center;
+  }
+
+  /* Retainer toggle card: stack label + switch */
+  main form > .card > .flex.items-center.justify-between.gap-4 {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+  }
+
+  main form > .card > .flex.items-center.justify-between.gap-4 > button[role='switch'] {
+    align-self: flex-start;
+  }
+
+  /* Inputs already w-full; guard against overflow */
+  .input,
+  input.input,
+  select.input,
+  textarea.input {
+    max-width: 100%;
+    min-width: 0;
+  }
+
+  /* Pricing breakdown row can wrap tighter */
+  main .flex.justify-between.items-baseline {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+}
+
+@media (min-width: 769px) {
+  .app-sidebar-overlay {
+    display: none !important;
+  }
+
+  .app-sidebar-container {
+    width: 15rem !important;
+    flex: 0 0 15rem !important;
+    max-width: none !important;
+    min-width: 0 !important;
+    overflow: visible !important;
+  }
+
+  .app-sidebar {
+    position: relative !important;
+    left: auto !important;
+    top: auto !important;
+    right: auto !important;
+    bottom: auto !important;
+    height: 100% !important;
+    width: 100% !important;
+    max-width: none !important;
+    min-height: 0 !important;
+    transform: none !important;
+    transition: none !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+  }
+
+}

@@ -95,6 +95,7 @@ CREATE TABLE IF NOT EXISTS bookings (
   payment_method TEXT DEFAULT 'direct', -- 'direct' | 'card'
   status TEXT DEFAULT 'Pending', -- Pending | Signed | Paid
   payment_status TEXT DEFAULT 'Unpaid', -- Unpaid | Partial | Paid
+  origin TEXT NOT NULL DEFAULT 'local', -- local | cloud (source of row)
   public_token TEXT UNIQUE NOT NULL,
   terms_and_conditions TEXT,
   notes TEXT,

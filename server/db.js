@@ -95,6 +95,7 @@ async function init() {
   migratePackageTemplates();
   migrateBookingTermsTemplates();
   migratePortalPackageJson();
+  migrateBookingOrigin();
   migrateUserPaymentPortal();
 
   // Seed default contract templates if none exist
@@ -513,6 +514,20 @@ function migratePortalPackageJson() {
       const bcols = new Set(bookingInfo[0].values.map((row) => row[ni]));
       if (!bcols.has('portal_package_json')) {
         _db.run('ALTER TABLE bookings ADD COLUMN portal_package_json TEXT;');
+      }
+    }
+  }
+  saveDb();
+}
+
+function migrateBookingOrigin() {
+  const bookingInfo = _db.exec('PRAGMA table_info(bookings);');
+  if (bookingInfo && bookingInfo[0]) {
+    const ni = bookingInfo[0].columns.indexOf('name');
+    if (ni >= 0) {
+      const bcols = new Set(bookingInfo[0].values.map((row) => row[ni]));
+      if (!bcols.has('origin')) {
+        _db.run(`ALTER TABLE bookings ADD COLUMN origin TEXT NOT NULL DEFAULT 'local';`);
       }
     }
   }
